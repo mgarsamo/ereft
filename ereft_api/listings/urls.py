@@ -1,0 +1,49 @@
+# FILE: ereft_api/listings/urls.py
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from rest_framework.authtoken.views import obtain_auth_token
+from django.contrib.auth.views import LogoutView
+from . import views
+
+# Create router for ViewSets
+router = DefaultRouter()
+router.register(r'properties', views.PropertyViewSet, basename='property')
+router.register(r'favorites', views.FavoriteViewSet, basename='favorite')
+router.register(r'profile', views.UserProfileViewSet, basename='userprofile')
+router.register(r'neighborhoods', views.NeighborhoodViewSet, basename='neighborhood')
+
+urlpatterns = [
+    # API Root
+    path('', views.api_root, name='api_root'),
+    
+    # Router URLs
+    path('', include(router.urls)),
+    
+    # Property Search
+    path('properties/search/', views.PropertySearchView.as_view(), name='property-search'),
+    
+    # Featured Properties
+    path('properties/featured/', views.featured_properties, name='featured-properties'),
+    
+    # Property Statistics
+    path('properties/stats/', views.property_stats, name='property-stats'),
+    
+    # Property Views Tracking
+    path('properties/<uuid:property_id>/track-view/', views.track_property_view, name='track-property-view'),
+    
+    # Search History
+    path('search-history/', views.search_history, name='search-history'),
+    
+    # User Stats
+    path('users/me/stats/', views.UserStatsView.as_view(), name='user-stats'),
+    
+    # Authentication
+    path('auth/login/', views.custom_login, name='custom_login'),
+    path('auth/register/', views.custom_register, name='custom_register'),
+    path('auth/token/', obtain_auth_token, name='api_token_auth'),
+    path('auth/logout/', LogoutView.as_view(), name='logout'),
+    
+    # User Profile
+    path('profile/', views.user_profile, name='user-profile'),
+]
