@@ -33,10 +33,22 @@ def home_view(request):
     })
 
 # ------------------------------------------------------
+# Health Check View for Railway
+# ------------------------------------------------------
+def health_check(request):
+    """Health check endpoint for Railway deployment"""
+    return JsonResponse({
+        "status": "healthy",
+        "service": "Ereft API",
+        "timestamp": "2025-01-27T00:00:00Z"
+    }, status=200)
+
+# ------------------------------------------------------
 # URL Patterns
 # ------------------------------------------------------
 urlpatterns = [
     path('', home_view, name='api_root'),                      # API root index
+    path('health/', health_check, name='health_check'),        # Health check for Railway
     path('admin/', admin.site.urls),                           # Django admin
     path('api/', include('listings.urls')),                    # Property listings API
     path('api/payments/', include('payments.urls')),           # Payment API

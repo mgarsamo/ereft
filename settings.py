@@ -36,7 +36,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-3$9z&u@k%v!x=8k6_nzr8
 # Debug and allowed hosts for development
 # ------------------------------------------------------
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*,healthcheck.railway.app', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # ------------------------------------------------------
 # Installed Applications
