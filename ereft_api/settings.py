@@ -28,13 +28,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ------------------------------------------------------
 # SECURITY KEY (required for cryptographic signing)
 # ------------------------------------------------------
-SECRET_KEY = 'django-insecure-3$9z&u@k%v!x=8k6_nzr8#z-g8*_d@7%lm7nb4^=7&eqjvjk4p'  # ⚠️ Change this for production
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-3$9z&u@k%v!x=8k6_nzr8#z-g8*_d@7%lm7nb4^=7&eqjvjk4p')
 
 # ------------------------------------------------------
 # Debug and allowed hosts for development
 # ------------------------------------------------------
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.12.129,*', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.12.129,*.onrender.com,ereft-api.onrender.com', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # ------------------------------------------------------
 # Installed Applications
@@ -101,7 +101,7 @@ CORS_ALLOW_HEADERS = [
 # CSRF settings for API
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
-    default='https://ereft-api-production.up.railway.app,https://*.ngrok-free.app',
+    default='https://ereft-api.onrender.com,https://*.onrender.com,https://*.ngrok-free.app',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
 
