@@ -15,7 +15,9 @@ except ImportError:
         value = os.environ.get(key, default)
         if cast and value is not None:
             if cast == bool:
-                return value.lower() in ('true', '1', 'yes', 'on')
+                if isinstance(value, bool):
+                    return value
+                return str(value).lower() in ('true', '1', 'yes', 'on')
             elif callable(cast):
                 return cast(value)
         return value
@@ -164,9 +166,9 @@ USE_TZ = True
 # ------------------------------------------------------
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+# STATICFILES_DIRS = [
+#     os.path.join(BASE_DIR, 'static'),
+# ]
 
 # Whitenoise for serving static files in production
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
