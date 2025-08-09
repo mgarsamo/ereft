@@ -12,7 +12,7 @@ class UserProfile(models.Model):
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     phone_number = models.CharField(max_length=20, blank=True, null=True)
-    profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
+    profile_picture = models.CharField(max_length=500, blank=True, null=True)  # Temporary: was ImageField
     is_agent = models.BooleanField(default=False)
     agent_license = models.CharField(max_length=100, blank=True, null=True)
     company_name = models.CharField(max_length=200, blank=True, null=True)
@@ -119,7 +119,7 @@ class PropertyImage(models.Model):
     Multiple images for each property
     """
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='property_images/')
+    image = models.CharField(max_length=500)  # Temporary: was ImageField
     caption = models.CharField(max_length=255, blank=True, null=True)
     is_primary = models.BooleanField(default=False)
     order = models.PositiveIntegerField(default=0)

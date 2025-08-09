@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',           # For building RESTful APIs
     'rest_framework.authtoken', # For token-based auth
-    # 'django_filters',           # For advanced filtering - disabled for deployment
+    # 'django_filters',           # Removed for deployment
     'corsheaders',              # For CORS support (mobile apps)
 
     # Local apps
