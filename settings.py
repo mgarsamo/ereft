@@ -36,7 +36,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-3$9z&u@k%v!x=8k6_nzr8
 # Debug and allowed hosts for development
 # ------------------------------------------------------
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.12.129,*.onrender.com,ereft-api.onrender.com', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # ------------------------------------------------------
 # Installed Applications
@@ -268,4 +268,33 @@ FIREBASE_CONFIG = {
     'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', ''),
     'messagingSenderId': os.environ.get('FIREBASE_MESSAGING_SENDER_ID', ''),
     'appId': os.environ.get('FIREBASE_APP_ID', ''),
+}
+
+# ------------------------------------------------------
+# Logging Configuration
+# ------------------------------------------------------
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'gunicorn': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
 }
