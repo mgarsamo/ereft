@@ -53,7 +53,7 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',           # For building RESTful APIs
     'rest_framework.authtoken', # For token-based auth
-    # 'django_filters',           # Removed for deployment
+    'django_filters',           # For filtering API results
     'corsheaders',              # For CORS support (mobile apps)
 
     # Local apps
@@ -189,7 +189,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
     'DEFAULT_FILTER_BACKENDS': [
-        # 'django_filters.rest_framework.DjangoFilterBackend',  # Disabled for deployment
+        'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
