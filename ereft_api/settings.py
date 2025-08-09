@@ -133,22 +133,13 @@ TEMPLATES = [
 # ------------------------------------------------------
 # Database (default SQLite for development)
 # ------------------------------------------------------
-if HAS_PROD_DEPS:
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=f'sqlite:///{BASE_DIR}/db.sqlite3',
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
+# Database configuration - Using SQLite for simplicity
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
-else:
-    # Fallback to simple SQLite for local development
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+}
 
 # ------------------------------------------------------
 # Password validation (default)

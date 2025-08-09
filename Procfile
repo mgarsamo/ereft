@@ -1,2 +1,1 @@
-web: gunicorn wsgi:application --bind 0.0.0.0:$PORT
-release: python manage.py migrate
+web: python manage.py migrate && gunicorn wsgi:application --bind 0.0.0.0:$PORT
