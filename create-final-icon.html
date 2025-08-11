@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ereft Final App Icon - Perfect Size Match</title>
+</head>
+<body>
+    <h2>Ereft App Icon - House & E Same Height</h2>
+    <canvas id="iconCanvas" width="1024" height="1024" style="border: 2px solid #2196F3; border-radius: 15px;"></canvas>
+    <br><br>
+    <button onclick="downloadIcon()" style="background: #2196F3; color: white; padding: 15px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">Download Perfect 1024x1024 Icon</button>
+    
+    <script>
+        const canvas = document.getElementById('iconCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set background to white
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, 1024, 1024);
+        
+        // House dimensions - centered left
+        const houseX = 100;
+        const houseY = 250;  // Start from this Y position
+        const houseWidth = 350;
+        const houseHeight = 400;  // Total height including roof
+        const roofHeight = 120;
+        const bodyHeight = houseHeight - roofHeight;
+        
+        // Draw black house
+        ctx.fillStyle = '#000000';
+        
+        // House body (rectangle)
+        const bodyY = houseY + roofHeight;
+        ctx.fillRect(houseX, bodyY, houseWidth, bodyHeight);
+        
+        // Roof (triangle)
+        ctx.beginPath();
+        ctx.moveTo(houseX - 30, bodyY);  // Left point
+        ctx.lineTo(houseX + houseWidth/2, houseY);  // Top point
+        ctx.lineTo(houseX + houseWidth + 30, bodyY);  // Right point
+        ctx.closePath();
+        ctx.fill();
+        
+        // Door (white rectangle)
+        const doorWidth = 80;
+        const doorHeight = 140;
+        const doorX = houseX + houseWidth/2 - doorWidth/2;
+        const doorY = bodyY + bodyHeight - doorHeight;
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(doorX, doorY, doorWidth, doorHeight);
+        
+        // Door outline
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(doorX, doorY, doorWidth, doorHeight);
+        
+        // Door handle
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(doorX + doorWidth - 15, doorY + doorHeight/2, 6, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Windows (white with black frames)
+        const windowSize = 60;
+        const windowY = bodyY + 40;
+        
+        // Left window
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(houseX + 60, windowY, windowSize, windowSize);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(houseX + 60, windowY, windowSize, windowSize);
+        
+        // Right window
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(houseX + houseWidth - 120, windowY, windowSize, windowSize);
+        ctx.strokeRect(houseX + houseWidth - 120, windowY, windowSize, windowSize);
+        
+        // Window cross patterns
+        ctx.beginPath();
+        // Left window cross
+        ctx.moveTo(houseX + 90, windowY);
+        ctx.lineTo(houseX + 90, windowY + windowSize);
+        ctx.moveTo(houseX + 60, windowY + windowSize/2);
+        ctx.lineTo(houseX + 120, windowY + windowSize/2);
+        // Right window cross
+        ctx.moveTo(houseX + houseWidth - 90, windowY);
+        ctx.lineTo(houseX + houseWidth - 90, windowY + windowSize);
+        ctx.moveTo(houseX + houseWidth - 120, windowY + windowSize/2);
+        ctx.lineTo(houseX + houseWidth - 60, windowY + windowSize/2);
+        ctx.stroke();
+        
+        // Draw blue "E" - SAME HEIGHT AS HOUSE (from roof top to house bottom)
+        ctx.fillStyle = '#2196F3';
+        
+        const eX = houseX + houseWidth + 80;  // Gap from house
+        const eY = houseY;  // Start from same Y as roof top
+        const eWidth = 280;  // Wide enough E
+        const eTotalHeight = houseHeight;  // SAME HEIGHT AS HOUSE
+        
+        // Calculate bar dimensions
+        const barThickness = 70;  // Thick bars
+        const verticalBarWidth = 80;  // Thick vertical bar
+        const spacing = (eTotalHeight - 3 * barThickness) / 2;
+        
+        // Vertical bar (left side of E) - full height
+        ctx.fillRect(eX, eY, verticalBarWidth, eTotalHeight);
+        
+        // Top horizontal bar
+        ctx.fillRect(eX, eY, eWidth, barThickness);
+        
+        // Middle horizontal bar (slightly shorter)
+        const middleBarWidth = eWidth * 0.8;
+        ctx.fillRect(eX, eY + barThickness + spacing, middleBarWidth, barThickness);
+        
+        // Bottom horizontal bar
+        ctx.fillRect(eX, eY + eTotalHeight - barThickness, eWidth, barThickness);
+        
+        // Add corner accents
+        ctx.fillStyle = '#2196F3';
+        // Top left corner
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(60, 0);
+        ctx.lineTo(0, 60);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Bottom right corner
+        ctx.beginPath();
+        ctx.moveTo(1024, 1024);
+        ctx.lineTo(964, 1024);
+        ctx.lineTo(1024, 964);
+        ctx.closePath();
+        ctx.fill();
+        
+        function downloadIcon() {
+            const link = document.createElement('a');
+            link.download = 'ereft-icon-perfect-1024x1024.png';
+            link.href = canvas.toDataURL('image/png', 1.0);
+            link.click();
+            alert('Perfect icon downloaded! Replace your current icon.png with this file.');
+        }
+        
+        console.log('Perfect Ereft icon generated - House and E are exactly the same height!');
+    </script>
+    
+    <div style="margin-top: 20px; font-family: Arial; max-width: 600px;">
+        <h3>✅ Perfect Design Features:</h3>
+        <ul>
+            <li><strong>House & E Same Height:</strong> Both elements span from top to bottom equally</li>
+            <li><strong>Proper Spacing:</strong> Clean gap between house and E</li>
+            <li><strong>Bold Blue E:</strong> Thick, professional letterform</li>
+            <li><strong>1024x1024 PNG:</strong> Perfect for App Store requirements</li>
+            <li><strong>Clean Design:</strong> Professional look with corner accents</li>
+        </ul>
+        <h3>📱 Instructions:</h3>
+        <ol>
+            <li>Click "Download Perfect 1024x1024 Icon"</li>
+            <li>Replace your current <code>icon.png</code> file in <code>assets/</code> folder</li>
+            <li>The E is now perfectly sized to match the house height!</li>
+        </ol>
+    </div>
+</body>
+</html>

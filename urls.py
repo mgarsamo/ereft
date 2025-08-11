@@ -94,14 +94,34 @@ def oauth_redirect_handler(request):
                 'error': 'No authorization code received'
             }, status=400)
         
-        # Return the authorization code and state to the mobile app
-        # This will be used by the mobile app to complete the OAuth flow
-        return JsonResponse({
-            'success': True,
-            'code': code,
-            'state': state,
-            'message': 'Authorization code received successfully'
-        })
+        # For production OAuth flow, redirect back to the mobile app with the code
+        # This allows the mobile app to receive the authorization code
+        redirect_url = f"ereft://oauth?code={code}&state={state}"
+        
+        # Return HTML that will redirect to the mobile app
+        html_response = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Redirecting to Ereft App</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+        </head>
+        <body>
+            <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+                <h2>Redirecting to Ereft App...</h2>
+                <p>Please wait while we complete your sign-in.</p>
+                <script>
+                    // Redirect to the mobile app
+                    window.location.href = "{redirect_url}";
+                </script>
+                <p>If you're not redirected automatically, <a href="{redirect_url}">click here</a>.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        from django.http import HttpResponse
+        return HttpResponse(html_response, content_type='text/html')
         
     except Exception as e:
         print(f"🔐 OAuth handler error: {str(e)}")

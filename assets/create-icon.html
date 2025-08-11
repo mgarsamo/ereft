@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ereft App Icon Generator</title>
+</head>
+<body>
+    <canvas id="iconCanvas" width="1024" height="1024" style="border: 1px solid #ccc;"></canvas>
+    <br>
+    <button onclick="downloadIcon()">Download Icon</button>
+    
+    <script>
+        const canvas = document.getElementById('iconCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set background to white
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, 1024, 1024);
+        
+        // Draw black house
+        ctx.fillStyle = '#000000';
+        
+        // House base (rectangle)
+        ctx.fillRect(200, 400, 300, 250);
+        
+        // Roof (triangle)
+        ctx.beginPath();
+        ctx.moveTo(180, 400);
+        ctx.lineTo(350, 280);
+        ctx.lineTo(520, 400);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Door (rectangle)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(320, 520, 60, 130);
+        
+        // Door handle
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(365, 585, 5, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Windows
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(230, 450, 40, 40);
+        ctx.fillRect(430, 450, 40, 40);
+        
+        // Window frames
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(230, 450, 40, 40);
+        ctx.strokeRect(430, 450, 40, 40);
+        
+        // Window cross
+        ctx.beginPath();
+        ctx.moveTo(250, 450);
+        ctx.lineTo(250, 490);
+        ctx.moveTo(230, 470);
+        ctx.lineTo(270, 470);
+        ctx.moveTo(450, 450);
+        ctx.lineTo(450, 490);
+        ctx.moveTo(430, 470);
+        ctx.lineTo(470, 470);
+        ctx.stroke();
+        
+        // Draw "E" next to house in blue
+        ctx.fillStyle = '#2196F3';
+        ctx.font = 'bold 200px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('E', 550, 550);
+        
+        // Add subtle blue border around entire icon
+        ctx.strokeStyle = '#2196F3';
+        ctx.lineWidth = 8;
+        ctx.strokeRect(4, 4, 1016, 1016);
+        
+        function downloadIcon() {
+            const link = document.createElement('a');
+            link.download = 'ereft-icon-1024x1024.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+    </script>
+</body>
+</html>
