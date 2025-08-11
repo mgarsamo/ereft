@@ -218,6 +218,87 @@ def google_oauth_view(request):
         }, status=500)
 
 # ------------------------------------------------------
+# Google ID Token Verification View (for mobile app)
+# ------------------------------------------------------
+@csrf_exempt
+@require_http_methods(["POST"])
+def google_id_token_verify_view(request):
+    try:
+        data = json.loads(request.body)
+        id_token = data.get('id_token')
+        
+        if not id_token:
+            return JsonResponse({
+                'error': 'ID token is required'
+            }, status=400)
+        
+        print(f"🔐 Google ID token verification request received")
+        print(f"🔐 ID token length: {len(id_token)}")
+        
+        # Verify the ID token with Google
+        verify_url = 'https://oauth2.googleapis.com/tokeninfo'
+        params = {'id_token': id_token}
+        
+        verify_response = requests.get(verify_url, params=params)
+        verify_response.raise_for_status()
+        token_info = verify_response.json()
+        
+        print(f"🔐 Google token verification successful")
+        print(f"🔐 Token info: {token_info}")
+        
+        # Extract user information from verified token
+        google_id = token_info.get('sub')
+        email = token_info.get('email')
+        first_name = token_info.get('given_name', '')
+        last_name = token_info.get('family_name', '')
+        profile_picture = token_info.get('picture')
+        
+        if not email:
+            return JsonResponse({'error': 'Email is required from Google ID token'}, status=400)
+        
+        # Create or update user
+        try:
+            user = User.objects.get(email=email)
+            user.first_name = first_name
+            user.last_name = last_name
+            user.save()
+            print(f"🔐 Existing user updated: {email}")
+        except User.DoesNotExist:
+            username = f"google_{google_id}" if google_id else f"google_{email.split('@')[0]}"
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                password=None
+            )
+            print(f"🔐 New user created: {email}")
+        
+        # Generate or get existing token
+        token, created = Token.objects.get_or_create(user=user)
+        
+        return JsonResponse({
+            'token': token.key,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'profile_picture': profile_picture,
+                'provider': 'google',
+                'google_id': google_id
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except requests.RequestException as e:
+        return JsonResponse({'error': f'Google token verification failed: {str(e)}'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': f'Unexpected error: {str(e)}'}, status=500)
+
+# ------------------------------------------------------
 # URL Patterns
 # ------------------------------------------------------
 urlpatterns = [
@@ -237,6 +318,7 @@ urlpatterns = [
     path('api/auth/login/', LoginView.as_view(template_name='registration/login.html'), name='login'),
     path('api/auth/logout/', LogoutView.as_view(), name='logout'),
     path('api/auth/google/', google_oauth_view, name='google_oauth'),
+    path('api/auth/google/verify/', google_id_token_verify_view, name='google_id_token_verify'),
 ]
 
 # ------------------------------------------------------
