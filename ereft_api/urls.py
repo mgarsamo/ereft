@@ -13,6 +13,7 @@ import json
 import requests
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
+import datetime
 
 # ------------------------------------------------------
 # Root API Landing View
@@ -147,6 +148,16 @@ def google_oauth_view(request):
         }, status=500)
 
 # ------------------------------------------------------
+# Test endpoint to verify deployment
+# ------------------------------------------------------
+def test_endpoint(request):
+    return JsonResponse({
+        'message': 'Backend is working!',
+        'timestamp': str(datetime.datetime.now()),
+        'oauth_routes': ['/oauth', '/oauth/']
+    })
+
+# ------------------------------------------------------
 # OAuth Redirect Handler
 # ------------------------------------------------------
 @csrf_exempt
@@ -199,6 +210,7 @@ def oauth_redirect_handler(request):
 # ------------------------------------------------------
 urlpatterns = [
     path('', home_view, name='api_root'),                      # API root index
+    path('test/', test_endpoint, name='test'),                 # Test endpoint
     path('admin/', admin.site.urls),                           # Django admin
     path('oauth', oauth_redirect_handler, name='oauth_redirect_no_slash'),  # OAuth redirect handler (no slash)
     path('oauth/', oauth_redirect_handler, name='oauth_redirect'),  # OAuth redirect handler (with slash)
