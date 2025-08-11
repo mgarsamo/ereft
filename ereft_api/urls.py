@@ -179,8 +179,8 @@ def oauth_redirect_handler(request):
                 'error': 'No authorization code received'
             }, status=400)
         
-        # For now, just return the code and state to the mobile app
-        # In a production app, you might want to handle this differently
+        # Return the authorization code and state to the mobile app
+        # This will be used by the mobile app to complete the OAuth flow
         return JsonResponse({
             'success': True,
             'code': code,
