@@ -156,10 +156,18 @@ def oauth_redirect_handler(request):
     This endpoint receives the authorization code and redirects back to the mobile app
     """
     try:
+        print(f"🔐 OAuth redirect handler called with method: {request.method}")
+        print(f"🔐 Request path: {request.path}")
+        print(f"🔐 Request GET params: {request.GET}")
+        
         # Get the authorization code and state from Google's redirect
         code = request.GET.get('code')
         state = request.GET.get('state')
         error = request.GET.get('error')
+        
+        print(f"🔐 Code: {code}")
+        print(f"🔐 State: {state}")
+        print(f"🔐 Error: {error}")
         
         if error:
             return JsonResponse({
@@ -181,6 +189,7 @@ def oauth_redirect_handler(request):
         })
         
     except Exception as e:
+        print(f"🔐 OAuth handler error: {str(e)}")
         return JsonResponse({
             'error': f'Unexpected error: {str(e)}'
         }, status=500)
@@ -191,7 +200,8 @@ def oauth_redirect_handler(request):
 urlpatterns = [
     path('', home_view, name='api_root'),                      # API root index
     path('admin/', admin.site.urls),                           # Django admin
-    path('oauth/', oauth_redirect_handler, name='oauth_redirect'),  # OAuth redirect handler
+    path('oauth', oauth_redirect_handler, name='oauth_redirect_no_slash'),  # OAuth redirect handler (no slash)
+    path('oauth/', oauth_redirect_handler, name='oauth_redirect'),  # OAuth redirect handler (with slash)
     path('api/', include('listings.urls')),                    # Property listings API
     path('api/payments/', include('payments.urls')),           # Payment API
     path('api-auth/', include('rest_framework.urls')),         # Browsable API login/logout
