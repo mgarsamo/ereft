@@ -152,9 +152,10 @@ def google_oauth_view(request):
 # ------------------------------------------------------
 def test_endpoint(request):
     return JsonResponse({
-        'message': 'Backend is working!',
+        'message': 'Backend is working! DEPLOYMENT FORCED!',
         'timestamp': str(datetime.datetime.now()),
-        'oauth_routes': ['/oauth', '/oauth/']
+        'oauth_routes': ['/oauth', '/oauth/'],
+        'deployment_status': 'FORCED_REDEPLOYMENT_COMPLETED'
     })
 
 # ------------------------------------------------------
@@ -210,6 +211,7 @@ def oauth_redirect_handler(request):
 # ------------------------------------------------------
 urlpatterns = [
     path('', home_view, name='api_root'),                      # API root index
+    path('debug/', lambda request: JsonResponse({'status': 'DEBUG_ENDPOINT_WORKING', 'oauth_routes': ['/oauth', '/oauth/']}), name='debug'),  # Debug endpoint
     path('test/', test_endpoint, name='test'),                 # Test endpoint
     path('admin/', admin.site.urls),                           # Django admin
     path('oauth', oauth_redirect_handler, name='oauth_redirect_no_slash'),  # OAuth redirect handler (no slash)
