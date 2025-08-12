@@ -247,6 +247,9 @@ def oauth_redirect_handler(request):
                     body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
                     .spinner {{ border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }}
                     @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+                    .auth-data {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto; }}
+                    .auth-data h3 {{ margin-top: 0; color: #495057; }}
+                    .auth-data p {{ margin: 5px 0; font-family: monospace; }}
                 </style>
             </head>
             <body>
@@ -260,8 +263,40 @@ def oauth_redirect_handler(request):
                     
                     console.log('Opening deep link:', deepLink);
                     
-                    // Attempt to open the deep link
-                    window.location.href = deepLink;
+                    // Multiple attempts to open the deep link
+                    let attempts = 0;
+                    const maxAttempts = 3;
+                    
+                    function attemptDeepLink() {{
+                        attempts++;
+                        console.log('Deep link attempt', attempts, 'of', maxAttempts);
+                        
+                        try {{
+                            // Method 1: Direct location change
+                            window.location.href = deepLink;
+                            
+                            // Method 2: Try using window.open as fallback
+                            setTimeout(() => {{
+                                if (attempts < maxAttempts) {{
+                                    console.log('Trying window.open method...');
+                                    window.open(deepLink, '_self');
+                                }}
+                            }}, 1000);
+                            
+                        }} catch (error) {{
+                            console.error('Deep link attempt failed:', error);
+                        }}
+                    }}
+                    
+                    // Start attempting to open the deep link
+                    attemptDeepLink();
+                    
+                    // Retry if needed
+                    setTimeout(() => {{
+                        if (attempts < maxAttempts) {{
+                            attemptDeepLink();
+                        }}
+                    }}, 2000);
                     
                     // Fallback: if deep link doesn't work, show manual instructions
                     setTimeout(function() {{
@@ -273,11 +308,32 @@ def oauth_redirect_handler(request):
                                 <li>Return to the Ereft mobile app</li>
                                 <li>You should now be signed in automatically</li>
                             </ol>
-                            <p><strong>Authentication Token:</strong> {token.key[:20]}...</p>
-                            <p><strong>User ID:</strong> {user.id}</p>
-                            <p><strong>Email:</strong> {email}</p>
+                            
+                            <div class="auth-data">
+                                <h3>Authentication Data (for debugging):</h3>
+                                <p><strong>Authentication Token:</strong> {token.key[:20]}...</p>
+                                <p><strong>User ID:</strong> {user.id}</p>
+                                <p><strong>Email:</strong> {email}</p>
+                                <p><strong>First Name:</strong> {first_name}</p>
+                                <p><strong>Last Name:</strong> {last_name}</p>
+                                <p><strong>Google ID:</strong> {google_id}</p>
+                            </div>
+                            
+                            <div style="margin: 30px 0;">
+                                <button onclick="window.location.href='ereft://oauth?token={token.key}&user_id={user.id}&email={email}&first_name={first_name}&last_name={last_name}&google_id={google_id}'" 
+                                        style="background: #4285F4; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 10px;">
+                                    🔗 Open Ereft App
+                                </button>
+                                <br>
+                                <button onclick="window.location.href='ereft://oauth?token={token.key}&user_id={user.id}&email={email}&first_name={first_name}&last_name={last_name}&google_id={google_id}'" 
+                                        style="background: #34A853; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 10px;">
+                                    📱 Try Deep Link Again
+                                </button>
+                            </div>
+                            
+                            <p><em>Note: If you're still not signed in, please try the Google Sign-In button again.</em></p>
                         `;
-                    }}, 3000);
+                    }}, 5000);
                 </script>
             </body>
             </html>
