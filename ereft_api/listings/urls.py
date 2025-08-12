@@ -11,10 +11,12 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 from django.contrib.auth.views import LogoutView
 from . import views
+from django.http import JsonResponse
+from datetime import datetime
 
 # Create router for ViewSets
 router = DefaultRouter()
-router.register(r'properties', views.PropertyViewSet, basename='property')
+router.register(r'properties/list', views.PropertyViewSet, basename='property')  # Changed from 'properties' to 'properties/list'
 router.register(r'favorites', views.FavoriteViewSet, basename='favorite')
 router.register(r'profile', views.UserProfileViewSet, basename='userprofile')
 router.register(r'neighborhoods', views.NeighborhoodViewSet, basename='neighborhood')
@@ -22,6 +24,20 @@ router.register(r'neighborhoods', views.NeighborhoodViewSet, basename='neighborh
 urlpatterns = [
     # API Root
     path('', views.api_root, name='api_root'),
+    
+    # DEBUG: Force redeployment and test URL loading
+    path('debug-urls/', lambda request: JsonResponse({
+        'message': 'URL patterns are loading correctly',
+        'timestamp': str(datetime.now()),
+        'endpoints': [
+            'properties/featured/',
+            'properties/stats/',
+            'properties/search/',
+            'properties/list/',
+            'favorites/',
+            'profile/',
+        ]
+    }), name='debug-urls'),
     
     # Custom Property URLs - MUST come BEFORE router to avoid conflicts
     # Use more specific patterns to prevent router from catching them
