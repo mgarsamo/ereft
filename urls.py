@@ -99,30 +99,9 @@ def oauth_redirect_handler(request):
         # This allows the mobile app to extract the code from result.url
         redirect_url = f"https://ereft.onrender.com/oauth/success?code={code}&state={state}"
         
-        # Return HTML that will redirect to the success URL
-        html_response = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>OAuth Success</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-        </head>
-        <body>
-            <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-                <h2>OAuth Successful</h2>
-                <p>Redirecting with authorization code...</p>
-                <script>
-                    // Redirect to the success URL with the authorization code
-                    window.location.href = "{redirect_url}";
-                </script>
-                <p>If you're not redirected automatically, <a href="{redirect_url}">click here</a>.</p>
-            </div>
-        </body>
-        </html>
-        """
-        
-        from django.http import HttpResponse
-        return HttpResponse(html_response, content_type='text/html')
+        # Use HTTP redirect instead of JavaScript for more reliability
+        from django.http import HttpResponseRedirect
+        return HttpResponseRedirect(redirect_url)
         
     except Exception as e:
         print(f"🔐 OAuth handler error: {str(e)}")
