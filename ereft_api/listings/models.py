@@ -4,6 +4,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from cloudinary.models import CloudinaryField
 import uuid
 
 class UserProfile(models.Model):
@@ -12,7 +13,7 @@ class UserProfile(models.Model):
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     phone_number = models.CharField(max_length=20, blank=True, null=True)
-    profile_picture = models.CharField(max_length=500, blank=True, null=True)  # Temporary: was ImageField
+    profile_picture = CloudinaryField('image', blank=True, null=True)
     is_agent = models.BooleanField(default=False)
     agent_license = models.CharField(max_length=100, blank=True, null=True)
     company_name = models.CharField(max_length=200, blank=True, null=True)
@@ -119,7 +120,7 @@ class PropertyImage(models.Model):
     Multiple images for each property
     """
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='images')
-    image = models.CharField(max_length=500)  # Temporary: was ImageField
+    image = CloudinaryField('image')
     caption = models.CharField(max_length=255, blank=True, null=True)
     is_primary = models.BooleanField(default=False)
     order = models.PositiveIntegerField(default=0)

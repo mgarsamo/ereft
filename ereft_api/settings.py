@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     'rest_framework.authtoken', # For token-based auth
     # 'django_filters',           # Removed for deployment
     'corsheaders',              # For CORS support (mobile apps)
+    'cloudinary',               # For image uploads and storage
+    'cloudinary_storage',       # Django integration for Cloudinary
 
     # Local apps
     'listings',                 # Your property listings app
@@ -267,3 +269,29 @@ FIREBASE_CONFIG = {
     'messagingSenderId': os.environ.get('FIREBASE_MESSAGING_SENDER_ID', ''),
     'appId': os.environ.get('FIREBASE_APP_ID', ''),
 }
+
+# ------------------------------------------------------
+# Cloudinary Configuration
+# ------------------------------------------------------
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+
+# Configure Cloudinary
+cloudinary.config(
+    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME', 'detdm1snc'),
+    api_key=os.environ.get('CLOUDINARY_API_KEY', '935983952526243'),
+    api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'ZbaIe1eVXx0wdL3XYhDjExCfQb8'),
+    secure=True
+)
+
+# Cloudinary settings
+CLOUDINARY = {
+    'cloud_name': os.environ.get('CLOUDINARY_CLOUD_NAME', 'detdm1snc'),
+    'api_key': os.environ.get('CLOUDINARY_API_KEY', '935983952526243'),
+    'api_secret': os.environ.get('CLOUDINARY_API_SECRET', 'ZbaIe1eVXx0wdL3XYhDjExCfQb8'),
+    'secure': True,
+}
+
+# Use Cloudinary for media storage
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'

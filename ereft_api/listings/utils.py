@@ -7,6 +7,9 @@ from django.utils.html import strip_tags
 from PIL import Image
 from io import BytesIO
 from django.core.files import File
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 def send_property_inquiry_email(contact):
     """
@@ -187,3 +190,105 @@ def format_phone_number(phone):
         return f"+{digits}"
     
     return phone
+
+def upload_image_to_cloudinary(image_file, folder="ereft_properties"):
+    """
+    Upload an image to Cloudinary and return the public URL
+    
+    Args:
+        image_file: The image file to upload
+        folder: The folder in Cloudinary to store the image
+    
+    Returns:
+        dict: Cloudinary upload result with public_id, url, etc.
+    """
+    try:
+        # Upload to Cloudinary
+        result = cloudinary.uploader.upload(
+            image_file,
+            folder=folder,
+            resource_type="image",
+            transformation=[
+                {"width": 1200, "height": 800, "crop": "limit"},
+                {"quality": "auto:good", "fetch_format": "auto"}
+            ]
+        )
+        
+        print(f"✅ Image uploaded successfully to Cloudinary: {result['public_id']}")
+        return result
+        
+    except Exception as e:
+        print(f"❌ Error uploading image to Cloudinary: {str(e)}")
+        raise e
+
+def delete_image_from_cloudinary(public_id):
+    """
+    Delete an image from Cloudinary
+    
+    Args:
+        public_id: The public ID of the image to delete
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        result = cloudinary.uploader.destroy(public_id)
+        print(f"✅ Image deleted from Cloudinary: {public_id}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error deleting image from Cloudinary: {str(e)}")
+        return False
+
+def get_cloudinary_url(public_id, transformation=None):
+    """
+    Get a Cloudinary URL with optional transformations
+    
+    Args:
+        public_id: The public ID of the image
+        transformation: Optional transformation parameters
+    
+    Returns:
+        str: The Cloudinary URL
+    """
+    try:
+        if transformation:
+            url = cloudinary.CloudinaryImage(public_id).build_url(**transformation)
+        else:
+            url = cloudinary.CloudinaryImage(public_id).build_url()
+        
+        return url
+        
+    except Exception as e:
+        print(f"❌ Error generating Cloudinary URL: {str(e)}")
+        return None
+
+def optimize_image_for_property(image_file):
+    """
+    Optimize an image specifically for property listings
+    
+    Args:
+        image_file: The image file to optimize
+    
+    Returns:
+        dict: Cloudinary upload result
+    """
+    try:
+        result = cloudinary.uploader.upload(
+            image_file,
+            folder="ereft_properties",
+            resource_type="image",
+            transformation=[
+                {"width": 1200, "height": 800, "crop": "limit"},
+                {"quality": "auto:good", "fetch_format": "auto"},
+                {"effect": "auto_contrast"},
+                {"effect": "auto_brightness"}
+            ]
+        )
+        
+        print(f"✅ Property image optimized and uploaded: {result['public_id']}")
+        return result
+        
+    except Exception as e:
+        print(f"❌ Error optimizing property image: {str(e)}")
+        raise e
