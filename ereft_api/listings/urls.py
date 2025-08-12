@@ -2,6 +2,7 @@
 # UPDATED: Fixed URL routing conflict - custom URLs now come BEFORE router
 # PRODUCTION READY: All endpoints properly configured
 # 🚨 FORCE REDEPLOYMENT: URL routing fix not active on production
+# 🚨 URGENT: Backend still returning 404 for featured/stats endpoints
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
