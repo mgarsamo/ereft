@@ -3,6 +3,7 @@
 # PRODUCTION READY: All endpoints properly configured
 # 🚨 FORCE REDEPLOYMENT: URL routing fix not active on production
 # 🚨 URGENT: Backend still returning 404 for featured/stats endpoints
+# 🚨 CRITICAL: All API endpoints failing - force new deployment immediately
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
