@@ -17,20 +17,14 @@ urlpatterns = [
     # API Root
     path('', views.api_root, name='api_root'),
     
-    # Router URLs
-    path('', include(router.urls)),
-    
-    # Property Search
-    path('properties/search/', views.PropertySearchView.as_view(), name='property-search'),
-    
-    # Featured Properties
+    # Custom Property URLs - MUST come BEFORE router to avoid conflicts
     path('properties/featured/', views.featured_properties, name='featured-properties'),
-    
-    # Property Statistics
     path('properties/stats/', views.property_stats, name='property-stats'),
-    
-    # Property Views Tracking
+    path('properties/search/', views.PropertySearchView.as_view(), name='property-search'),
     path('properties/<uuid:property_id>/track-view/', views.track_property_view, name='track-property-view'),
+    
+    # Router URLs - Include AFTER custom URLs
+    path('', include(router.urls)),
     
     # Search History
     path('search-history/', views.search_history, name='search-history'),
