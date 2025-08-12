@@ -68,7 +68,7 @@ def test_endpoint(request):
 def oauth_redirect_handler(request):
     """
     Handle OAuth redirect from Google
-    This endpoint receives the authorization code and redirects to the mobile app
+    This endpoint receives the authorization code and returns it to the mobile app
     """
     try:
         print(f"🔐 OAuth redirect handler called with method: {request.method}")
@@ -94,34 +94,14 @@ def oauth_redirect_handler(request):
                 'error': 'No authorization code received'
             }, status=400)
         
-        # For production OAuth flow, redirect to the mobile app with the code
-        # This allows the mobile app to receive the authorization code via deep linking
-        redirect_url = f"ereft://oauth?code={code}&state={state}"
-        
-        # Return HTML that will redirect to the mobile app
-        html_response = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Redirecting to Ereft App</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-        </head>
-        <body>
-            <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-                <h2>Redirecting to Ereft App...</h2>
-                <p>Please wait while we complete your sign-in.</p>
-                <script>
-                    // Redirect to the mobile app with the authorization code
-                    window.location.href = "{redirect_url}";
-                </script>
-                <p>If you're not redirected automatically, <a href="{redirect_url}">click here</a>.</p>
-            </div>
-        </body>
-        </html>
-        """
-        
-        from django.http import HttpResponse
-        return HttpResponse(html_response, content_type='text/html')
+        # For production OAuth flow, return the authorization code and state
+        # The mobile app will receive this and call the backend to exchange for tokens
+        return JsonResponse({
+            'success': True,
+            'code': code,
+            'state': state,
+            'message': 'Authorization code received successfully'
+        })
         
     except Exception as e:
         print(f"🔐 OAuth handler error: {str(e)}")
