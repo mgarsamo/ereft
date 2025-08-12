@@ -219,12 +219,6 @@ urlpatterns = [
     path('api/', include('listings.urls')),                    # Property listings API
     path('api/payments/', include('payments.urls')),           # Payment API
     path('api-auth/', include('rest_framework.urls')),         # Browsable API login/logout
-
-    # Authentication endpoints
-    path('api/auth/token/', obtain_auth_token, name='api_token_auth'),
-    path('api/auth/login/', LoginView.as_view(template_name='registration/login.html'), name='login'),
-    path('api/auth/logout/', LogoutView.as_view(), name='logout'),
-    path('api/auth/google/', google_oauth_view, name='google_oauth'),
 ]
 
 # ------------------------------------------------------
