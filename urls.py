@@ -171,15 +171,87 @@ def oauth_redirect_handler(request):
             print(f"🔐 Redirecting to mobile app with authentication data")
             print(f"🔐 Deep link: {mobile_deep_link}")
             
-            # Use HTTP redirect to the mobile app deep link
-            from django.http import HttpResponseRedirect
-            return HttpResponseRedirect(mobile_deep_link)
+            # Instead of trying to redirect to custom protocol (which Django blocks),
+            # we'll return an HTML page with JavaScript that opens the deep link
+            # The mobile app can intercept this and handle the authentication
+            html_response = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Signing you in...</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                    .spinner {{ border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }}
+                    @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+                </style>
+            </head>
+            <body>
+                <h2>Signing you into Ereft...</h2>
+                <div class="spinner"></div>
+                <p>Please wait while we complete your sign-in...</p>
+                
+                <script>
+                    // Try to open the mobile app deep link
+                    const deepLink = 'ereft://oauth?token={token}&user_id={user.id}&email={email}&first_name={first_name}&last_name={last_name}&google_id={google_id}';
+                    
+                    console.log('Opening deep link:', deepLink);
+                    
+                    // Attempt to open the deep link
+                    window.location.href = deepLink;
+                    
+                    // Fallback: if deep link doesn't work, show manual instructions
+                    setTimeout(function() {{
+                        document.body.innerHTML = `
+                            <h2>Sign-in Complete!</h2>
+                            <p>You have been successfully signed into Ereft.</p>
+                            <p>If you're not automatically redirected to the app, please:</p>
+                            <ol style="text-align: left; max-width: 400px; margin: 0 auto;">
+                                <li>Return to the Ereft mobile app</li>
+                                <li>You should now be signed in automatically</li>
+                            </ol>
+                            <p><strong>Authentication Token:</strong> {token[:20]}...</p>
+                            <p><strong>User ID:</strong> {user.id}</p>
+                            <p><strong>Email:</strong> {email}</p>
+                        `;
+                    }}, 3000);
+                </script>
+            </body>
+            </html>
+            """
+            
+            print(f"🔐 Returning HTML response with deep link: ereft://oauth?token=...&user_id={user.id}&email={email}")
+            
+            # Return HTML response instead of redirect
+            from django.http import HttpResponse
+            return HttpResponse(html_response, content_type='text/html')
             
         except Exception as e:
             print(f"🔐 OAuth processing error: {str(e)}")
-            # Redirect to mobile app with error
-            error_deep_link = f"ereft://oauth?error={str(e)}"
-            return HttpResponseRedirect(error_deep_link)
+            # Return HTML error page instead of redirect
+            error_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Sign-in Error</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; color: #721c24; background-color: #f8d7da; }}
+                    .error-box {{ background-color: #f5c6cb; border: 1px solid #f5c6cb; border-radius: 5px; padding: 20px; max-width: 500px; margin: 0 auto; }}
+                </style>
+            </head>
+            <body>
+                <div class="error-box">
+                    <h2>Sign-in Error</h2>
+                    <p>We encountered an error while processing your Google sign-in:</p>
+                    <p><strong>{str(e)}</strong></p>
+                    <p>Please try again or contact support if the problem persists.</p>
+                    <p><a href="javascript:history.back()">Go Back</a></p>
+                </div>
+            </body>
+            </html>
+            """
+            return HttpResponse(error_html, content_type='text/html')
         
     except Exception as e:
         print(f"🔐 OAuth handler error: {str(e)}")
