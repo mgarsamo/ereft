@@ -4,6 +4,7 @@
 # 🚨 FORCE REDEPLOYMENT: URL routing fix not active on production
 # 🚨 URGENT: Backend still returning 404 for featured/stats endpoints
 # 🚨 CRITICAL: All API endpoints failing - force new deployment immediately
+# 🚨 URGENT REDEPLOYMENT: New URL patterns not taking effect - /api/featured/ still 404
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
@@ -23,6 +24,7 @@ urlpatterns = [
     path('', views.api_root, name='api_root'),
     
     # Custom Property URLs - MUST come BEFORE router to avoid conflicts
+    # Use more specific patterns to prevent router from catching them
     path('properties/featured/', views.featured_properties, name='featured-properties'),
     path('properties/stats/', views.property_stats, name='property-stats'),
     path('properties/search/', views.PropertySearchView.as_view(), name='property-search'),
