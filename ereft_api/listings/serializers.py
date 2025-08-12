@@ -30,14 +30,15 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'image_url', 'caption', 'is_primary', 'order', 'created_at']
     
     def get_image_url(self, obj):
-        """Get the image URL - either from Cloudinary or local storage"""
+        """Get the image URL - either from Cloudinary or direct URL"""
         if obj.image:
-            if hasattr(obj.image, 'url'):
-                return obj.image.url
-            elif hasattr(obj.image, 'name'):
-                # This is a Cloudinary public_id, generate URL
+            # If it's already a URL, return it
+            if obj.image.startswith('http'):
+                return obj.image
+            # If it's a Cloudinary public_id, generate URL
+            else:
                 from .utils import get_cloudinary_url
-                return get_cloudinary_url(obj.image.name)
+                return get_cloudinary_url(obj.image)
         return None
 
 class PropertySerializer(serializers.ModelSerializer):
@@ -92,7 +93,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
 class PropertyCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating properties - Ethiopia fields, m² units"""
     images = serializers.ListField(
-        child=serializers.ImageField(),
+        child=serializers.CharField(),
         required=False
     )
     
@@ -111,10 +112,10 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
         images_data = validated_data.pop('images', [])
         property_obj = Property.objects.create(**validated_data)
         
-        for i, image_data in enumerate(images_data):
+        for i, image_url in enumerate(images_data):
             PropertyImage.objects.create(
                 property=property_obj,
-                image=image_data,
+                image=image_url,  # Store Cloudinary URL directly
                 is_primary=(i == 0),  # First image is primary
                 order=i
             )
