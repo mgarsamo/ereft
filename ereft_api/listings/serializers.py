@@ -23,9 +23,22 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class PropertyImageSerializer(serializers.ModelSerializer):
     """Property image serializer"""
+    image_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = PropertyImage
-        fields = ['id', 'image', 'caption', 'is_primary', 'order', 'created_at']
+        fields = ['id', 'image', 'image_url', 'caption', 'is_primary', 'order', 'created_at']
+    
+    def get_image_url(self, obj):
+        """Get the image URL - either from Cloudinary or local storage"""
+        if obj.image:
+            if hasattr(obj.image, 'url'):
+                return obj.image.url
+            elif hasattr(obj.image, 'name'):
+                # This is a Cloudinary public_id, generate URL
+                from .utils import get_cloudinary_url
+                return get_cloudinary_url(obj.image.name)
+        return None
 
 class PropertySerializer(serializers.ModelSerializer):
     """Property serializer with nested images"""

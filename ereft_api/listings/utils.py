@@ -292,3 +292,40 @@ def optimize_image_for_property(image_file):
     except Exception as e:
         print(f"❌ Error optimizing property image: {str(e)}")
         raise e
+
+def handle_property_image_upload(image_file, property_id):
+    """
+    Handle property image upload to Cloudinary and return image data
+    
+    Args:
+        image_file: The uploaded image file
+        property_id: The property ID for organization
+    
+    Returns:
+        dict: Image data with Cloudinary URL and metadata
+    """
+    try:
+        # Upload to Cloudinary
+        result = cloudinary.uploader.upload(
+            image_file,
+            folder=f"ereft_properties/{property_id}",
+            resource_type="image",
+            transformation=[
+                {"width": 1200, "height": 800, "crop": "limit"},
+                {"quality": "auto:good", "fetch_format": "auto"}
+            ]
+        )
+        
+        # Return formatted image data
+        return {
+            'public_id': result['public_id'],
+            'url': result['secure_url'],
+            'width': result['width'],
+            'height': result['height'],
+            'format': result['format'],
+            'size': result['bytes']
+        }
+        
+    except Exception as e:
+        print(f"❌ Error handling property image upload: {str(e)}")
+        raise e

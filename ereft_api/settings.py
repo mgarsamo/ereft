@@ -54,7 +54,6 @@ INSTALLED_APPS = [
     # 'django_filters',           # Removed for deployment
     'corsheaders',              # For CORS support (mobile apps)
     'cloudinary',               # For image uploads and storage
-    'cloudinary_storage',       # Django integration for Cloudinary
 
     # Local apps
     'listings',                 # Your property listings app
@@ -292,6 +291,3 @@ CLOUDINARY = {
     'api_secret': os.environ.get('CLOUDINARY_API_SECRET', 'ZbaIe1eVXx0wdL3XYhDjExCfQb8'),
     'secure': True,
 }
-
-# Use Cloudinary for media storage
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
