@@ -68,7 +68,7 @@ def test_endpoint(request):
 def oauth_redirect_handler(request):
     """
     Handle OAuth redirect from Google
-    This endpoint receives the authorization code and completes the OAuth flow
+    This endpoint receives the authorization code and redirects with the code
     """
     try:
         print(f"🔐 OAuth redirect handler called with method: {request.method}")
@@ -94,8 +94,70 @@ def oauth_redirect_handler(request):
                 'error': 'No authorization code received'
             }, status=400)
         
-        # For expo-auth-session, we need to return the authorization code
-        # The mobile app will receive this and call the backend to exchange for tokens
+        # For WebBrowser.openAuthSessionAsync to work, we need to redirect to a URL
+        # that contains the authorization code as query parameters
+        # This allows the mobile app to extract the code from result.url
+        redirect_url = f"https://ereft.onrender.com/oauth/success?code={code}&state={state}"
+        
+        # Return HTML that will redirect to the success URL
+        html_response = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>OAuth Success</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+        </head>
+        <body>
+            <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+                <h2>OAuth Successful</h2>
+                <p>Redirecting with authorization code...</p>
+                <script>
+                    // Redirect to the success URL with the authorization code
+                    window.location.href = "{redirect_url}";
+                </script>
+                <p>If you're not redirected automatically, <a href="{redirect_url}">click here</a>.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        from django.http import HttpResponse
+        return HttpResponse(html_response, content_type='text/html')
+        
+    except Exception as e:
+        print(f"🔐 OAuth handler error: {str(e)}")
+        return JsonResponse({
+            'error': f'Unexpected error: {str(e)}'
+        }, status=500)
+
+# ------------------------------------------------------
+# OAuth Success Handler
+# ------------------------------------------------------
+@csrf_exempt
+def oauth_success_handler(request):
+    """
+    Handle OAuth success redirect with authorization code
+    This endpoint returns the authorization code in a way the mobile app can process
+    """
+    try:
+        print(f"🔐 OAuth success handler called with method: {request.method}")
+        print(f"🔐 Request path: {request.path}")
+        print(f"🔐 Request GET params: {request.GET}")
+        
+        # Get the authorization code and state from the redirect
+        code = request.GET.get('code')
+        state = request.GET.get('state')
+        
+        print(f"🔐 Success Code: {code}")
+        print(f"🔐 Success State: {state}")
+        
+        if not code:
+            return JsonResponse({
+                'error': 'No authorization code received'
+            }, status=400)
+        
+        # Return the authorization code and state
+        # The mobile app will extract this from the URL
         return JsonResponse({
             'success': True,
             'code': code,
@@ -104,7 +166,7 @@ def oauth_redirect_handler(request):
         })
         
     except Exception as e:
-        print(f"🔐 OAuth handler error: {str(e)}")
+        print(f"🔐 OAuth success handler error: {str(e)}")
         return JsonResponse({
             'error': f'Unexpected error: {str(e)}'
         }, status=500)
@@ -309,6 +371,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),                           # Django admin
     path('oauth', oauth_redirect_handler, name='oauth_redirect_no_slash'),  # OAuth redirect handler (no slash)
     path('oauth/', oauth_redirect_handler, name='oauth_redirect'),  # OAuth redirect handler (with slash)
+    path('oauth/success', oauth_success_handler, name='oauth_success'), # OAuth success handler
     path('api/', include('listings.urls')),                    # Property listings API
     path('api/payments/', include('payments.urls')),           # Payment API
     path('api-auth/', include('rest_framework.urls')),         # Browsable API login/logout
