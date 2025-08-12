@@ -94,14 +94,92 @@ def oauth_redirect_handler(request):
                 'error': 'No authorization code received'
             }, status=400)
         
-        # For WebBrowser.openAuthSessionAsync to work, we need to redirect to a URL
-        # that contains the authorization code as query parameters
-        # This allows the mobile app to extract the code from result.url
-        redirect_url = f"https://ereft.onrender.com/oauth/success?code={code}&state={state}"
+        # Instead of just redirecting, we need to process the OAuth flow
+        # Exchange the authorization code for user tokens and create/login the user
+        print(f"🔐 Processing OAuth flow for user signup/login...")
         
-        # Use HTTP redirect instead of JavaScript for more reliability
-        from django.http import HttpResponseRedirect
-        return HttpResponseRedirect(redirect_url)
+        try:
+            # Exchange authorization code for access token
+            GOOGLE_CLIENT_ID = '91486871350-79fvub6490473eofjpu1jjlhncuiua44.apps.googleusercontent.com'
+            GOOGLE_CLIENT_SECRET = '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'
+            
+            token_url = 'https://oauth2.googleapis.com/token'
+            token_data = {
+                'client_id': GOOGLE_CLIENT_ID,
+                'client_secret': GOOGLE_CLIENT_SECRET,
+                'code': code,
+                'grant_type': 'authorization_code',
+                'redirect_uri': 'https://ereft.onrender.com/oauth'
+            }
+            
+            print(f"🔐 Exchanging authorization code for access token...")
+            token_response = requests.post(token_url, data=token_data)
+            token_response.raise_for_status()
+            token_info = token_response.json()
+            
+            access_token = token_info.get('access_token')
+            if not access_token:
+                raise Exception('Failed to obtain access token from Google')
+            
+            # Get user info from Google
+            user_info_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
+            headers = {'Authorization': f'Bearer {access_token}'}
+            user_response = requests.get(user_info_url, headers=headers)
+            user_response.raise_for_status()
+            user_info = user_response.json()
+            
+            # Extract user information
+            google_id = user_info.get('id')
+            email = user_info.get('email')
+            first_name = user_info.get('given_name', '')
+            last_name = user_info.get('family_name', '')
+            profile_picture = user_info.get('picture')
+            
+            if not email:
+                raise Exception('Email is required from Google OAuth')
+            
+            print(f"🔐 User info received: {email}")
+            
+            # Check if user already exists
+            try:
+                user = User.objects.get(email=email)
+                # Update existing user info
+                user.first_name = first_name
+                user.last_name = last_name
+                user.save()
+                print(f"🔐 Existing user updated: {email}")
+            except User.DoesNotExist:
+                # Create new user (this is the signup part!)
+                username = f"google_{google_id}" if google_id else f"google_{email.split('@')[0]}"
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    password=None  # No password for OAuth users
+                )
+                print(f"🔐 New user created (signup): {email}")
+            
+            # Generate or get existing token
+            token, created = Token.objects.get_or_create(user=user)
+            print(f"🔐 Authentication token generated: {token.key[:10]}...")
+            
+            # Now redirect to mobile app with the authentication token
+            # This allows the user to be automatically signed in
+            mobile_deep_link = f"ereft://oauth?token={token.key}&user_id={user.id}&email={email}&first_name={first_name}&last_name={last_name}&google_id={google_id}"
+            
+            print(f"🔐 Redirecting to mobile app with authentication data")
+            print(f"🔐 Deep link: {mobile_deep_link}")
+            
+            # Use HTTP redirect to the mobile app deep link
+            from django.http import HttpResponseRedirect
+            return HttpResponseRedirect(mobile_deep_link)
+            
+        except Exception as e:
+            print(f"🔐 OAuth processing error: {str(e)}")
+            # Redirect to mobile app with error
+            error_deep_link = f"ereft://oauth?error={str(e)}"
+            return HttpResponseRedirect(error_deep_link)
         
     except Exception as e:
         print(f"🔐 OAuth handler error: {str(e)}")
