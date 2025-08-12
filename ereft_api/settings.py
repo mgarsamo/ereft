@@ -132,15 +132,24 @@ TEMPLATES = [
 ]
 
 # ------------------------------------------------------
-# Database (default SQLite for development)
+# Database Configuration
 # ------------------------------------------------------
-# Database configuration - Using SQLite for simplicity
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Use DATABASE_URL from environment (Render) or fallback to SQLite
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # Production: Use DATABASE_URL from Render
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL)
     }
-}
+else:
+    # Development: Use SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # ------------------------------------------------------
 # Password validation (default)

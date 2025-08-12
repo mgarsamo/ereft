@@ -1,6 +1,7 @@
 # FILE: ereft_api/listings/urls.py
 # UPDATED: Fixed URL routing conflict - custom URLs now come BEFORE router
 # PRODUCTION READY: All endpoints properly configured
+# 🚨 FORCE REDEPLOYMENT: URL routing fix not active on production
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
