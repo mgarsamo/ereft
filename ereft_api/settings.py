@@ -255,7 +255,7 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 # ------------------------------------------------------
 # Google Maps Configuration
 # ------------------------------------------------------
-GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'AIzaSyAWis-jNmUwxCikA2FG7QqLi-nz7jEvadY')
 
 # ------------------------------------------------------
 # Firebase Configuration
