@@ -136,7 +136,7 @@ def google_oauth_view(request):
             'client_secret': GOOGLE_CLIENT_SECRET,
             'code': code,
             'grant_type': 'authorization_code',
-            'redirect_uri': redirect_uri or 'ereft://oauth'
+            'redirect_uri': redirect_uri or 'https://ereft.onrender.com/oauth'
         }
         
         token_response = requests.post(token_url, data=token_data)
