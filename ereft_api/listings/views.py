@@ -13,6 +13,10 @@ from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+import json
+import requests
 from .models import (
     Property, PropertyImage, Favorite, PropertyView, SearchHistory,
     Contact, Neighborhood, PropertyReview, UserProfile
@@ -480,3 +484,163 @@ def custom_register(request):
             'last_name': user.last_name,
         }
     }, status=status.HTTP_201_CREATED)
+
+@api_view(['POST'])
+@permission_classes([])
+@csrf_exempt
+def google_oauth_endpoint(request):
+    """
+    Handle Google OAuth authentication
+    Receives authorization code and exchanges it for user data
+    """
+    try:
+        print(f"🔐 Google OAuth endpoint called with method: {request.method}")
+        
+        # Get authorization code from request
+        code = request.data.get('code')
+        redirect_uri = request.data.get('redirect_uri')
+        
+        if not code:
+            return Response({
+                'error': 'Authorization code is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"🔐 Google OAuth: Processing code for redirect_uri: {redirect_uri}")
+        
+        # Google OAuth configuration
+        GOOGLE_CLIENT_ID = '91486871350-79fvub6490473eofjpu1jjlhncuiua44.apps.googleusercontent.com'
+        GOOGLE_CLIENT_SECRET = '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'
+        
+        # Exchange authorization code for access token
+        token_url = 'https://oauth2.googleapis.com/token'
+        token_data = {
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': redirect_uri or 'https://ereft.onrender.com/oauth'
+        }
+        
+        print(f"🔐 Google OAuth: Exchanging code for token...")
+        token_response = requests.post(token_url, data=token_data)
+        token_response.raise_for_status()
+        token_info = token_response.json()
+        
+        access_token = token_info.get('access_token')
+        if not access_token:
+            return Response({
+                'error': 'Failed to obtain access token from Google'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"🔐 Google OAuth: Access token obtained, fetching user info...")
+        
+        # Get user info from Google
+        user_info_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
+        headers = {'Authorization': f'Bearer {access_token}'}
+        user_response = requests.get(user_info_url, headers=headers)
+        user_response.raise_for_status()
+        user_info = user_response.json()
+        
+        # Extract user information
+        google_id = user_info.get('id')
+        email = user_info.get('email')
+        first_name = user_info.get('given_name', '')
+        last_name = user_info.get('family_name', '')
+        profile_picture = user_info.get('picture')
+        
+        if not email:
+            return Response({
+                'error': 'Email is required from Google OAuth'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"🔐 Google OAuth: User info received: {email}")
+        
+        # Check if user already exists
+        try:
+            user = User.objects.get(email=email)
+            print(f"🔐 Google OAuth: Existing user found: {user.username}")
+            
+            # Update existing user info
+            user.first_name = first_name
+            user.last_name = last_name
+            user.save()
+            
+        except User.DoesNotExist:
+            # Create new user
+            username = f"google_{google_id}" if google_id else f"google_{email.split('@')[0]}"
+            
+            # Ensure username is unique
+            base_username = username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}_{counter}"
+                counter += 1
+            
+            print(f"🔐 Google OAuth: Creating new user: {username}")
+            
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                password=None  # No password for OAuth users
+            )
+        
+        # Generate or get existing token
+        token, created = Token.objects.get_or_create(user=user)
+        
+        print(f"🔐 Google OAuth: Authentication successful for user: {user.username}")
+        
+        # Return user data and token
+        return Response({
+            'token': token.key,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'profile_picture': profile_picture,
+                'provider': 'google',
+                'google_id': google_id
+            }
+        })
+        
+    except requests.RequestException as e:
+        print(f"🔐 Google OAuth: Google API request failed: {str(e)}")
+        return Response({
+            'error': f'Google API request failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as e:
+        print(f"🔐 Google OAuth: Unexpected error: {str(e)}")
+        return Response({
+            'error': f'Unexpected error: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def verify_token(request):
+    """
+    Verify if the current user's token is valid
+    """
+    try:
+        # If we reach here, the token is valid (Django REST Framework handles this)
+        user = request.user
+        
+        return Response({
+            'valid': True,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            }
+        })
+        
+    except Exception as e:
+        print(f"🔐 Token verification error: {str(e)}")
+        return Response({
+            'valid': False,
+            'error': 'Token verification failed'
+        }, status=status.HTTP_401_UNAUTHORIZED)

@@ -38,6 +38,8 @@ urlpatterns = [
     path('auth/register/', views.custom_register, name='custom_register'),
     path('auth/token/', obtain_auth_token, name='api_token_auth'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
+    path('auth/google/', views.google_oauth_endpoint, name='google_oauth'),
+    path('auth/verify-token/', views.verify_token, name='verify_token'),
     
     # User Profile
     path('profile/', views.user_profile, name='user-profile'),
