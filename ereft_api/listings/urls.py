@@ -12,7 +12,7 @@ from datetime import datetime
 
 # Create router for ViewSets
 router = DefaultRouter()
-router.register(r'properties', views.PropertyViewSet, basename='property')
+router.register(r'properties-list', views.PropertyViewSet, basename='property')  # Changed to avoid conflict
 router.register(r'favorites', views.FavoriteViewSet, basename='favorite')
 router.register(r'profile', views.UserProfileViewSet, basename='userprofile')
 router.register(r'neighborhoods', views.NeighborhoodViewSet, basename='neighborhood')
