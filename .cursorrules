@@ -4,12 +4,13 @@
 ## 🏗️ PROJECT ARCHITECTURE
 
 ### Backend (Django REST Framework)
-- **Framework**: Django 4.1.0 + Django REST Framework 3.14.0
-- **Deployment**: Render (Python 3.13)
+- **Framework**: Django >=5.1 + Django REST Framework 3.14+
+- **Runtime**: Python 3.11 (Render)
+- **Deployment**: Render (Python 3.11)
 - **Database**: PostgreSQL via DATABASE_URL environment variable (production), SQLite (development)
-- **Authentication**: Token-based authentication with Django REST Framework
+- **Authentication**: JWT via djangorestframework-simplejwt
 - **File Storage**: Cloudinary for image uploads (manual integration, no django-cloudinary-storage)
-- **CORS**: Configured for mobile app origins
+- **CORS**: Configured for web/admin tools only (not required for native app)
 
 ### Mobile App (React Native + Expo)
 - **Framework**: React Native with Expo SDK
@@ -17,28 +18,26 @@
 - **State Management**: React Context API
 - **Maps**: react-native-maps with Google Maps API
 - **Authentication**: Google OAuth + SMS verification
-- **Deep Linking**: Custom scheme 'ereft://'
+- **Deep Linking**: Custom scheme 'ereft://oauth'
 
 ## 🔐 AUTHENTICATION SYSTEM
+
+### JWT Authentication
+- **All protected endpoints require**: `Authorization: Bearer <JWT>`
+- **Google OAuth & SMS flows must issue JWT on success**
+- **Use djangorestframework-simplejwt for JWT implementation**
 
 ### Google OAuth Flow
 - **Client IDs**: 
   - iOS: 91486871350-ic7gbroh747pe9u31gqe1jjlhncuiua44.apps.googleusercontent.com
   - Web: 91486871350-79fvub6490473eofjpu1jjlhncuiua44.apps.googleusercontent.com
-- **Redirect URI**: https://ereft.onrender.com/oauth (Google only allows HTTPS)
-- **Flow**: Mobile app → Google OAuth → Backend processes code → Returns user data + token
-- **Backend Endpoint**: /api/auth/google/ (POST with authorization code)
-- **Token Verification**: /api/auth/verify-token/ (GET with authentication)
+- **Server redirect (Google → backend)**: HTTPS only (https://ereft.onrender.com/oauth)
+- **App re-entry**: Custom deep link `ereft://oauth` is allowed and required for mobile
+- **Flow**: Mobile app → Google OAuth → Backend processes code → Returns JWT + user data
 
 ### SMS Verification
 - **Provider**: Twilio (configured in backend)
-- **Flow**: Phone number input → SMS sent → Code verification → Account creation/login
-- **Demo Users**: Available for testing (see UserStorage.js)
-
-### User Management
-- **Auto-login**: checkAuthStatus() verifies token with backend on app start
-- **Session Persistence**: AsyncStorage for token and user data
-- **Password Management**: Reset, change, and account deletion supported
+- **Flow**: Phone number input → SMS sent → Code verification → Account creation/login with JWT
 
 ## 🗺️ MAPS & GEOCODING
 
@@ -47,12 +46,6 @@
 - **Service**: GeocodingService.js for address-to-coordinate conversion
 - **Fallback System**: Ethiopian city coordinates when Google can't find exact address
 - **Map Display**: react-native-maps with property markers and clustering
-
-### Geocoding Features
-- **Address Conversion**: Street addresses to latitude/longitude
-- **Reverse Geocoding**: Coordinates to formatted addresses
-- **Distance Calculation**: Between properties and user location
-- **Fallback Coordinates**: Pre-defined coordinates for Ethiopian cities/districts
 
 ## 🏠 PROPERTY LISTING SYSTEM
 
@@ -63,15 +56,10 @@
 - **Neighborhood**: Geographic areas for property categorization
 - **Favorite**: User-saved properties
 
-### Property Types
-- **Residential**: House, Apartment, Townhouse, Villa
-- **Commercial**: Office, Retail, Industrial, Land
-- **Listing Types**: Sale, Rent, Lease
-
-### Features & Amenities
-- **Basic**: Bedrooms, bathrooms, area (m²), lot size
-- **Luxury**: Garage, pool, garden, balcony, AC, heating
-- **Status**: Active, featured, published, verified
+### Cloudinary & Images
+- **Option B selected**: FileField + manual Cloudinary upload (no django-cloudinary-storage, no Pillow)
+- **Store only Cloudinary secure_url in DB**: No image processing on server
+- **If switching to ImageField later**: Add Pillow explicitly
 
 ## 📱 MOBILE APP STRUCTURE
 
@@ -83,42 +71,32 @@
 - **LoginScreen**: Authentication options (Google, SMS, username/password)
 - **ProfileScreen**: User account management
 
-### Context Providers
-- **AuthContext**: Authentication state, user management, OAuth flows
-- **PropertyContext**: Property data, CRUD operations, search/filtering
-- **UserStorage**: Local data management, demo users, offline support
-
-### Navigation
-- **Tab Navigator**: Home, Map, Add Property, Profile
-- **Stack Navigator**: Property details, editing, authentication flows
-- **Deep Linking**: ereft:// scheme for OAuth callbacks
-
 ## 🔧 TECHNICAL REQUIREMENTS
 
+### API Response Contracts (Non-Breaking)
+- **/api/properties/**: `{id:int; title:str; price:number; location:str; images:[str]; features:obj; created_at:iso8601}`
+- **/api/properties/featured/**: `[{id:int; title:str; price:number; image:str}]`
+- **/api/properties/stats/**: `{count:int; avg_price:number; by_type:[{type:str; count:int}]}`
+- **/api/favorites/**: `{results:[{property_id:int; saved_at:iso8601}], count:int}`
+- **Do not change field names without updating serializer + mobile uses in same change**
+
+### Endpoint Guarantee
+- **If an endpoint above does not exist, create it (views, urls, serializer) before returning 404**
+
 ### Backend API Endpoints
-- **Properties**: /api/properties/ (CRUD operations)
-- **Featured**: /api/properties/featured/ (featured properties)
-- **Stats**: /api/properties/stats/ (market statistics)
-- **Search**: /api/properties/search/ (advanced property search)
-- **Favorites**: /api/favorites/ (user saved properties)
-- **Authentication**: /api/auth/* (login, register, OAuth, token verification)
-
-### URL Routing Priority
-- **Critical**: Custom endpoints MUST come BEFORE router.urls to prevent 404s
-- **Order**: Custom paths → Router → Authentication → Profile
-- **Example**: properties/featured/ must be defined before include(router.urls)
-
-### Database Configuration
-- **Production**: Use DATABASE_URL environment variable (PostgreSQL on Render)
-- **Development**: Fallback to SQLite for local development
-- **Migration**: Always run migrations after model changes
+- **Properties**: `/api/properties/` (CRUD operations)
+- **Featured**: `/api/properties/featured/` (featured properties)
+- **Stats**: `/api/properties/stats/` (market statistics)
+- **Search**: `/api/properties/search/` (advanced property search)
+- **Favorites**: `/api/favorites/` (user saved properties)
+- **Authentication**: `/api/auth/*` (login, register, OAuth, JWT verification)
 
 ## 🚫 CRITICAL RESTRICTIONS
 
 ### Google OAuth Limitations
-- **No Custom Schemes**: Google does NOT allow ereft://oauth redirect URIs
-- **HTTPS Only**: Must use https://ereft.onrender.com/oauth for production
-- **Web Client ID**: Use web client ID for OAuth flows (not iOS client ID)
+
+- **HTTPS Only for Server Redirects**: Must use `https://ereft.onrender.com/oauth` for production
+- **Custom Deep Links Allowed**: `ereft://oauth` is allowed and required for mobile app re-entry
 
 ### Hardcoding Restrictions
 - **No Hardcoded Values**: All configuration must use environment variables
@@ -126,7 +104,7 @@
 - **No Mock Data**: Use real backend APIs and database
 
 ### Build Dependencies
-- **Avoid Pillow**: Causes build failures on Render (Python 3.13 compatibility)
+- **Avoid Pillow**: Causes build failures on Render (Python 3.11 compatibility)
 - **No django-cloudinary-storage**: Use manual Cloudinary integration instead
 - **Minimal Dependencies**: Only essential packages for production
 
@@ -136,7 +114,7 @@
 - **No __DEV__ Flags**: All code must work in production
 - **Error Handling**: Comprehensive error handling and user feedback
 - **Performance**: Optimize for mobile devices and network conditions
-- **Security**: Proper authentication, validation, and data sanitization
+- **Security**: Proper JWT authentication, validation, and data sanitization
 
 ### User Experience
 - **Seamless Authentication**: Google OAuth should work like signup/login
@@ -144,19 +122,12 @@
 - **Loading States**: Clear feedback during API calls and operations
 - **Error Recovery**: Help users recover from errors gracefully
 
-### Data Management
-- **Real-time Updates**: Properties should reflect changes immediately
-- **Image Handling**: Cloudinary integration for reliable image storage
-- **Search & Filtering**: Advanced property discovery capabilities
-- **Favorites System**: User-curated property collections
-
 ## 🔍 DEBUGGING & TESTING
 
-### Logging Strategy
-- **Frontend**: Console logs with emojis for easy identification
-- **Backend**: Print statements for OAuth and critical operations
-- **API Calls**: Log request/response details for troubleshooting
-- **Error Tracking**: Capture and log all errors with context
+### Lint/Test Gates
+- **Python**: black, isort, ruff
+- **JS**: eslint, prettier
+- **Smoke tests must pass**: GET /api/properties/, /featured/, /stats/ return 200 (even if empty arrays)
 
 ### Testing Approach
 - **API Testing**: Use curl commands to verify backend endpoints
@@ -164,75 +135,25 @@
 - **OAuth Testing**: Verify complete flow from Google to app login
 - **Database Testing**: Ensure sample data and real data work correctly
 
-### Common Issues & Solutions
-- **404 Errors**: Check URL routing order in listings/urls.py
-- **Database Empty**: Use populate_sample_data management command
-- **Geocoding Failures**: Verify Google Maps API key and fallback coordinates
-- **OAuth Redirects**: Ensure backend /oauth endpoint exists and works
+## 🚨 CRITICAL REMINDERS
 
-## 📋 DEPLOYMENT CHECKLIST
+### Database Safety
+- **Never delete production data** without explicit permission
+- **Always backup** before major changes
+- **Test migrations** on local database first
+- **Use populate_sample_data** command for testing
 
-### Backend Deployment
-- [ ] All environment variables set in Render
-- [ ] requirements.txt includes all dependencies
-- [ ] URL routing properly configured
-- [ ] Database configuration uses environment variables
-- [ ] OAuth endpoints working correctly
+### API Consistency
+- **Maintain backward compatibility** when possible
+- **Version APIs** if breaking changes are necessary
+- **Document all endpoints** with examples
+- **Handle errors gracefully** with meaningful messages
 
-### Mobile App Deployment
-- [ ] Environment configuration updated
-- [ ] Google Maps API key configured
-- [ ] Deep linking scheme registered
-- [ ] OAuth redirect URI matches backend
-- [ ] All API endpoints tested
-
-### Post-Deployment Verification
-- [ ] Backend APIs return expected data
-- [ ] Google OAuth completes successfully
-- [ ] Property listings display correctly
-- [ ] Map integration works without errors
-- [ ] Image uploads function properly
-
-## 🚀 FUTURE ENHANCEMENTS
-
-### Planned Features
-- **Advanced Search**: Filters, saved searches, notifications
-- **User Messaging**: Contact property owners/agents
-- **Property Verification**: Admin approval system
-- **Analytics**: Property views, favorites, market trends
-- **Multi-language**: Amharic and English support
-
-### Technical Improvements
-- **Caching**: Redis for improved performance
-- **Real-time Updates**: WebSocket integration
-- **Push Notifications**: Property alerts and updates
-- **Offline Mode**: Enhanced offline functionality
-- **Performance**: Image optimization and lazy loading
-
-## 📞 SUPPORT & CONTACTS
-
-### Project Information
-- **Repository**: https://github.com/mgarsamo/ereft
-- **Backend**: https://ereft.onrender.com
-- **Mobile App**: Expo development build
-
-### Key Technologies
-- **Backend**: Django, PostgreSQL, Cloudinary
-- **Mobile**: React Native, Expo, Google Maps
-- **Authentication**: Google OAuth, Twilio SMS
-- **Deployment**: Render, Expo Application Services
-
-### Development Environment
-- **Backend**: Python 3.13, Django 4.1.0
-- **Mobile**: Node.js, Expo SDK, React Native
-- **Database**: PostgreSQL (production), SQLite (development)
-- **Version Control**: Git with main branch deployment
-
----
-
-## 🎯 REMEMBER: This is a PRODUCTION-READY Ethiopian real estate app. 
-## Every line of code must work in production, handle errors gracefully, 
-## and provide a seamless user experience for property buyers, sellers, and agents.
+### Mobile App Safety
+- **Test on real devices** before deployment
+- **Verify deep linking** works correctly
+- **Check offline behavior** and error states
+- **Ensure OAuth flows** complete successfully
 
 ## 🛠️ CODE CHANGE PROCESS
 
@@ -308,10 +229,6 @@ Ereft/
 │   │   │   ├── HomeScreen.js             # Main dashboard
 │   │   │   ├── MapScreen.js              # Interactive property map
 │   │   │   ├── PropertyDetailScreen.js   # Property details view
-│   │   │   ├── AddPropertyScreen.js      # Create/edit properties
-│   │   │   ├── LoginScreen.js            # Authentication screen
-│   │   │   ├── ProfileScreen.js          # User profile management
-│   │   │   └── SearchScreen.js           # Property search results
 │   │   ├── services/                     # External service integrations
 │   │   │   ├── GeocodingService.js       # Google Maps geocoding
 │   │   │   ├── CloudinaryService.js      # Image upload service
@@ -361,28 +278,8 @@ Ereft/
 - [ ] API endpoints tested on production
 - [ ] Mobile app tested with production backend
 
-## 🚨 CRITICAL REMINDERS
-
-### Database Safety
-- **Never delete production data** without explicit permission
-- **Always backup** before major changes
-- **Test migrations** on local database first
-- **Use populate_sample_data** command for testing
-
-### API Consistency
-- **Maintain backward compatibility** when possible
-- **Version APIs** if breaking changes are necessary
-- **Document all endpoints** with examples
-- **Handle errors gracefully** with meaningful messages
-
-### Mobile App Safety
-- **Test on real devices** before deployment
-- **Verify deep linking** works correctly
-- **Check offline behavior** and error states
-- **Ensure OAuth flows** complete successfully
-
 ---
 
-## 🎯 FINAL REMINDER: This is a PRODUCTION-READY Ethiopian real estate app.
-## Every line of code must work in production, handle errors gracefully,
+## 🎯 REMEMBER: This is a PRODUCTION-READY Ethiopian real estate app. 
+## Every line of code must work in production, handle errors gracefully, 
 ## and provide a seamless user experience for property buyers, sellers, and agents.
