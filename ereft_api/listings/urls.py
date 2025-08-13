@@ -25,6 +25,13 @@ urlpatterns = [
     # API Root
     path('', views.api_root, name='api_root'),
     
+    # SIMPLE TEST: Verify Django is loading our URLs
+    path('test-simple/', lambda request: JsonResponse({
+        'message': 'Django is loading listings URLs correctly',
+        'timestamp': str(datetime.now()),
+        'status': 'SUCCESS'
+    }), name='test-simple'),
+    
     # DEBUG: Force redeployment and test URL loading
     path('debug-urls/', lambda request: JsonResponse({
         'message': 'URL patterns are loading correctly',
