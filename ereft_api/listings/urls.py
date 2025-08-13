@@ -13,7 +13,7 @@ from datetime import datetime
 
 # Create router for ViewSets
 router = DefaultRouter()
-router.register(r'properties-list', views.PropertyViewSet, basename='property')  # Changed to avoid conflict
+router.register(r'properties', views.PropertyViewSet, basename='property')  # Reverted back to original
 router.register(r'favorites', views.FavoriteViewSet, basename='favorite')
 router.register(r'profile', views.UserProfileViewSet, basename='userprofile')
 router.register(r'neighborhoods', views.NeighborhoodViewSet, basename='neighborhood')
@@ -22,11 +22,11 @@ urlpatterns = [
     # API Root
     path('', views.api_root, name='api_root'),
     
-    # Custom Property URLs - MUST come BEFORE router to avoid conflicts
-    path('properties/featured/', views.featured_properties, name='featured-properties'),
-    path('properties/stats/', views.property_stats, name='property-stats'),
-    path('properties/search/', views.PropertySearchView.as_view(), name='property-search'),
-    path('properties/<uuid:property_id>/track-view/', views.track_property_view, name='track-property-view'),
+    # Custom Property URLs - Use more specific patterns to avoid router conflicts
+    path('featured-properties/', views.featured_properties, name='featured-properties'),
+    path('property-stats/', views.property_stats, name='property-stats'),
+    path('property-search/', views.PropertySearchView.as_view(), name='property-search'),
+    path('property-track/<uuid:property_id>/', views.track_property_view, name='track-property-view'),
     
     # Router URLs - Include AFTER custom URLs
     path('', include(router.urls)),

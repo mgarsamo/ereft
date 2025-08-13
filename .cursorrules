@@ -70,27 +70,6 @@
 - **LoginScreen**: Authentication options (Google, SMS, username/password)
 - **ProfileScreen**: User account management
 
-- **No Repetitive Diagnostics**: Avoid looping on unverified assumptions; require external evidence (e.g., HTTP responses) for claims about production status.
-
-## 🔧 TECHNICAL REQUIREMENTS
-
-### API Response Contracts (Non-Breaking)
-- **/api/properties/**: `{id:int; title:str; price:number; location:str; images:[str]; features:obj; created_at:iso8601}`
-- **/api/properties/featured/**: `[{id:int; title:str; price:number; image:str}]`
-- **/api/properties/stats/**: `{count:int; avg_price:number; by_type:[{type:str; count:int}]}`
-- **/api/favorites/**: `{results:[{property_id:int; saved_at:iso8601}], count:int}`
-- **Do not change field names without updating serializer + mobile uses in same change**
-
-### Endpoint Guarantee
-- **If an endpoint above does not exist and is not marked as "planned," create it (views, urls, serializer) before returning 404. For planned endpoints, do not fabricate logic—instead, return a placeholder 501 Not Implemented response with a note indicating it's upcoming.**
-
-### Backend API Endpoints
-- **Properties**: `/api/properties/` (CRUD operations)
-- **Featured**: `/api/properties/featured/` (featured properties) **[planned]**
-- **Stats**: `/api/properties/stats/` (market statistics) **[planned]**
-- **Search**: `/api/properties/search/` (advanced property search)
-- **Favorites**: `/api/favorites/` (user saved properties)
-- **Authentication**: `/api/auth/*` (login, register, OAuth, JWT verification)
 
 ## 🚫 CRITICAL RESTRICTIONS
 
