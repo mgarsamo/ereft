@@ -39,8 +39,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
     """
     queryset = Property.objects.filter(is_active=True, is_published=True, status='active')
     pagination_class = StandardResultsSetPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['property_type', 'listing_type', 'city', 'sub_city', 'kebele', 'bedrooms', 'bathrooms', 'status']
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'description', 'address', 'city', 'sub_city', 'kebele', 'street_name']
     ordering_fields = ['price', 'created_at', 'bedrooms', 'area_sqm']
     ordering = ['-created_at']
