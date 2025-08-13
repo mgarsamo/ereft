@@ -70,6 +70,8 @@
 - **LoginScreen**: Authentication options (Google, SMS, username/password)
 - **ProfileScreen**: User account management
 
+- **No Repetitive Diagnostics**: Avoid looping on unverified assumptions; require external evidence (e.g., HTTP responses) for claims about production status.
+
 ## 🔧 TECHNICAL REQUIREMENTS
 
 ### API Response Contracts (Non-Breaking)
