@@ -57,9 +57,8 @@
 - **Favorite**: User-saved properties
 
 ### Cloudinary & Images
-- **Option B selected**: FileField + manual Cloudinary upload (no django-cloudinary-storage, no Pillow)
+- **Option B selected**: FileField + manual Cloudinary upload (no django-cloudinary-storage, Avoid Pillow unless switching to ImageField)
 - **Store only Cloudinary secure_url in DB**: No image processing on server
-- **If switching to ImageField later**: Add Pillow explicitly
 
 ## 📱 MOBILE APP STRUCTURE
 
@@ -81,12 +80,12 @@
 - **Do not change field names without updating serializer + mobile uses in same change**
 
 ### Endpoint Guarantee
-- **If an endpoint above does not exist, create it (views, urls, serializer) before returning 404**
+- **If an endpoint above does not exist and is not marked as "planned," create it (views, urls, serializer) before returning 404. For planned endpoints, do not fabricate logic—instead, return a placeholder 501 Not Implemented response with a note indicating it's upcoming.**
 
 ### Backend API Endpoints
 - **Properties**: `/api/properties/` (CRUD operations)
-- **Featured**: `/api/properties/featured/` (featured properties)
-- **Stats**: `/api/properties/stats/` (market statistics)
+- **Featured**: `/api/properties/featured/` (featured properties) **[planned]**
+- **Stats**: `/api/properties/stats/` (market statistics) **[planned]**
 - **Search**: `/api/properties/search/` (advanced property search)
 - **Favorites**: `/api/favorites/` (user saved properties)
 - **Authentication**: `/api/auth/*` (login, register, OAuth, JWT verification)
