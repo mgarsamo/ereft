@@ -115,87 +115,165 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class PropertySearchView(generics.ListAPIView):
-    """
-    Advanced property search with filters
-    """
-    serializer_class = PropertyListSerializer
-    pagination_class = StandardResultsSetPagination
+    @action(detail=False, methods=['get'])
+    def featured(self, request):
+        """Get featured properties"""
+        properties = Property.objects.filter(is_active=True, is_featured=True)[:10]
+        serializer = PropertyListSerializer(properties, many=True, context={'request': request})
+        return Response(serializer.data)
 
-    def get_queryset(self):
-        queryset = Property.objects.filter(is_active=True)
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get property statistics"""
+        total_properties = Property.objects.filter(is_active=True).count()
+        for_sale = Property.objects.filter(is_active=True, listing_type='sale').count()
+        for_rent = Property.objects.filter(is_active=True, listing_type='rent').count()
+        avg_price = Property.objects.filter(is_active=True).aggregate(Avg('price'))['price__avg']
         
-        # Get search parameters
-        query = self.request.query_params.get('query', None)
-        property_type = self.request.query_params.get('property_type', None)
-        listing_type = self.request.query_params.get('listing_type', None)
-        min_price = self.request.query_params.get('min_price', None)
-        max_price = self.request.query_params.get('max_price', None)
-        min_bedrooms = self.request.query_params.get('min_bedrooms', None)
-        max_bedrooms = self.request.query_params.get('max_bedrooms', None)
-        min_bathrooms = self.request.query_params.get('min_bathrooms', None)
-        max_bathrooms = self.request.query_params.get('max_bathrooms', None)
-        city = self.request.query_params.get('city', None)
-        state = self.request.query_params.get('state', None)
-        has_garage = self.request.query_params.get('has_garage', None)
-        has_pool = self.request.query_params.get('has_pool', None)
-        sort_by = self.request.query_params.get('sort_by', '-created_at')
+        return Response({
+            'total_properties': total_properties,
+            'for_sale': for_sale,
+            'for_rent': for_rent,
+            'average_price': avg_price
+        })
+
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """Search properties with filters"""
+        queryset = self.get_queryset()
         
-        # Apply filters
-        if query:
+        # Apply search filters
+        search_query = request.query_params.get('search', '')
+        if search_query:
             queryset = queryset.filter(
-                Q(title__icontains=query) |
-                Q(description__icontains=query) |
-                Q(address__icontains=query) |
-                Q(city__icontains=query) |
-                Q(state__icontains=query)
+                Q(title__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(address__icontains=search_query) |
+                Q(city__icontains=search_query) |
+                Q(sub_city__icontains=search_query)
             )
         
+        # Apply property type filter
+        property_type = request.query_params.get('property_type', '')
         if property_type:
             queryset = queryset.filter(property_type=property_type)
         
+        # Apply listing type filter
+        listing_type = request.query_params.get('listing_type', '')
         if listing_type:
             queryset = queryset.filter(listing_type=listing_type)
         
+        # Apply price range filter
+        min_price = request.query_params.get('min_price', '')
         if min_price:
             queryset = queryset.filter(price__gte=min_price)
         
+        max_price = request.query_params.get('max_price', '')
         if max_price:
             queryset = queryset.filter(price__lte=max_price)
         
-        if min_bedrooms:
-            queryset = queryset.filter(bedrooms__gte=min_bedrooms)
+        # Apply bedroom filter
+        bedrooms = request.query_params.get('bedrooms', '')
+        if bedrooms:
+            queryset = queryset.filter(bedrooms__gte=bedrooms)
         
-        if max_bedrooms:
-            queryset = queryset.filter(bedrooms__lte=max_bedrooms)
+        # Apply bathroom filter
+        bathrooms = request.query_params.get('bathrooms', '')
+        if bathrooms:
+            queryset = queryset.filter(bathrooms__gte=bathrooms)
         
-        if min_bathrooms:
-            queryset = queryset.filter(bathrooms__gte=min_bathrooms)
-        
-        if max_bathrooms:
-            queryset = queryset.filter(bathrooms__lte=max_bathrooms)
-        
+        # Apply city filter
+        city = request.query_params.get('city', '')
         if city:
             queryset = queryset.filter(city__icontains=city)
         
-        if state:
-            queryset = queryset.filter(state__icontains=state)
-        
-        if has_garage == 'true':
-            queryset = queryset.filter(has_garage=True)
-        
-        if has_pool == 'true':
-            queryset = queryset.filter(has_pool=True)
-        
-        # Save search history if user is authenticated
-        if self.request.user.is_authenticated and query:
-            SearchHistory.objects.create(
-                user=self.request.user,
-                query=query,
-                filters=self.request.query_params.dict()
-            )
+        # Apply sub_city filter
+        sub_city = request.query_params.get('sub_city', '')
+        if sub_city:
+            queryset = queryset.filter(sub_city__icontains=sub_city)
         
         # Apply sorting
+        sort_by = request.query_params.get('sort_by', '-created_at')
+        if sort_by in ['price', '-price', 'created_at', '-created_at', 'bedrooms', '-bedrooms']:
+            queryset = queryset.order_by(sort_by)
+        
+        # Paginate results
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = PropertyListSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = PropertyListSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+class PropertySearchView(generics.ListAPIView):
+    """
+    Search properties with filters
+    """
+    serializer_class = PropertyListSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['property_type', 'listing_type', 'city', 'sub_city', 'bedrooms', 'bathrooms', 'status']
+    search_fields = ['title', 'description', 'address', 'city', 'sub_city', 'kebele', 'street_name']
+    ordering_fields = ['price', 'created_at', 'bedrooms', 'area_sqm']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = Property.objects.filter(is_active=True, is_published=True, status='active')
+        
+        # Apply search filters
+        search_query = self.request.query_params.get('search', '')
+        if search_query:
+            queryset = queryset.filter(
+                Q(title__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(address__icontains=search_query) |
+                Q(city__icontains=search_query) |
+                Q(sub_city__icontains=search_query)
+            )
+        
+        # Apply property type filter
+        property_type = self.request.query_params.get('property_type', '')
+        if property_type:
+            queryset = queryset.filter(property_type=property_type)
+        
+        # Apply listing type filter
+        listing_type = self.request.query_params.get('listing_type', '')
+        if listing_type:
+            queryset = queryset.filter(listing_type=listing_type)
+        
+        # Apply price range filter
+        min_price = self.request.query_params.get('min_price', '')
+        if min_price:
+            queryset = queryset.filter(price__gte=min_price)
+        
+        max_price = self.request.query_params.get('max_price', '')
+        if max_price:
+            queryset = queryset.filter(price__lte=max_price)
+        
+        # Apply bedroom filter
+        bedrooms = self.request.query_params.get('bedrooms', '')
+        if bedrooms:
+            queryset = queryset.filter(bedrooms__gte=bedrooms)
+        
+        # Apply bathroom filter
+        bathrooms = self.request.query_params.get('bathrooms', '')
+        if bathrooms:
+            queryset = queryset.filter(bathrooms__gte=bathrooms)
+        
+        # Apply city filter
+        city = self.request.query_params.get('city', '')
+        if city:
+            queryset = queryset.filter(city__icontains=city)
+        
+        # Apply sub_city filter
+        sub_city = self.request.query_params.get('sub_city', '')
+        if sub_city:
+            queryset = queryset.filter(sub_city__icontains=sub_city)
+        
+        # Apply sorting
+        sort_by = self.request.query_params.get('sort_by', '-created_at')
         if sort_by in ['price', '-price', 'created_at', '-created_at', 'bedrooms', '-bedrooms']:
             queryset = queryset.order_by(sort_by)
         
