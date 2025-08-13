@@ -102,7 +102,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         property_obj = self.get_object()
         
         if request.method == 'GET':
-            reviews = property_obj.reviews.all()
+            reviews = PropertyReview.objects.filter(property=property_obj, is_active=True)
             serializer = PropertyReviewSerializer(reviews, many=True)
             return Response(serializer.data)
         
@@ -112,6 +112,33 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 serializer.save(property=property_obj, user=request.user)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'])
+    def featured(self, request):
+        """Get featured properties"""
+        featured_properties = Property.objects.filter(
+            is_active=True, 
+            is_published=True, 
+            status='active',
+            is_featured=True
+        )[:10]
+        serializer = PropertyListSerializer(featured_properties, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get property statistics"""
+        total_properties = Property.objects.filter(is_active=True, is_published=True, status='active').count()
+        for_sale = Property.objects.filter(is_active=True, is_published=True, status='active', listing_type='sale').count()
+        for_rent = Property.objects.filter(is_active=True, is_published=True, status='active', listing_type='rent').count()
+        avg_price = Property.objects.filter(is_active=True, is_published=True, status='active').aggregate(Avg('price'))['price__avg']
+        
+        return Response({
+            'total_properties': total_properties,
+            'for_sale': for_sale,
+            'for_rent': for_rent,
+            'average_price': avg_price
+        })
 
 class PropertySearchView(generics.ListAPIView):
     """
