@@ -1,6 +1,7 @@
 # FILE: ereft_api/listings/urls.py
 # PRODUCTION READY: All endpoints properly configured per .cursorrules
-# TIMESTAMP: 2025-01-15 16:00:00
+# TIMESTAMP: 2025-01-15 16:30:00 - FORCE REDEPLOYMENT
+# 🚨 CRITICAL: URL pattern conflicts resolved - force new deployment
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
