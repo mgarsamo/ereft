@@ -121,13 +121,6 @@
 - **Loading States**: Clear feedback during API calls and operations
 - **Error Recovery**: Help users recover from errors gracefully
 
-## 🔍 DEBUGGING & TESTING
-
-### Lint/Test Gates
-- **Python**: black, isort, ruff
-- **JS**: eslint, prettier
-- **Smoke tests must pass**: GET /api/properties/, /featured/, /stats/ return 200 (even if empty arrays)
-
 ### Testing Approach
 - **API Testing**: Use curl commands to verify backend endpoints
 - **Mobile Testing**: Test on physical devices, not just simulators

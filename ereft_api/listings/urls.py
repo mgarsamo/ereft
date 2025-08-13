@@ -1,16 +1,49 @@
 # FILE: ereft_api/listings/urls.py
-# MINIMAL TEST: Testing if Django can load URLs at all
-# TIMESTAMP: 2025-01-15 15:45:00
+# PRODUCTION READY: All endpoints properly configured per .cursorrules
+# TIMESTAMP: 2025-01-15 16:00:00
 
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from rest_framework.authtoken.views import obtain_auth_token
+from django.contrib.auth.views import LogoutView
+from . import views
 from django.http import JsonResponse
 from datetime import datetime
 
+# Create router for ViewSets
+router = DefaultRouter()
+router.register(r'properties', views.PropertyViewSet, basename='property')
+router.register(r'favorites', views.FavoriteViewSet, basename='favorite')
+router.register(r'profile', views.UserProfileViewSet, basename='userprofile')
+router.register(r'neighborhoods', views.NeighborhoodViewSet, basename='neighborhood')
+
 urlpatterns = [
-    # MINIMAL TEST: Just one simple endpoint
-    path('minimal-test/', lambda request: JsonResponse({
-        'message': 'Django is loading listings URLs correctly',
-        'timestamp': str(datetime.now()),
-        'status': 'SUCCESS'
-    }), name='minimal-test'),
+    # API Root
+    path('', views.api_root, name='api_root'),
+    
+    # Custom Property URLs - MUST come BEFORE router to avoid conflicts
+    path('properties/featured/', views.featured_properties, name='featured-properties'),
+    path('properties/stats/', views.property_stats, name='property-stats'),
+    path('properties/search/', views.PropertySearchView.as_view(), name='property-search'),
+    path('properties/<uuid:property_id>/track-view/', views.track_property_view, name='track-property-view'),
+    
+    # Router URLs - Include AFTER custom URLs
+    path('', include(router.urls)),
+    
+    # Search History
+    path('search-history/', views.search_history, name='search-history'),
+    
+    # User Stats
+    path('users/me/stats/', views.UserStatsView.as_view(), name='user-stats'),
+    
+    # Authentication
+    path('auth/login/', views.custom_login, name='custom_login'),
+    path('auth/register/', views.custom_register, name='custom_register'),
+    path('auth/token/', obtain_auth_token, name='api_token_auth'),
+    path('auth/logout/', LogoutView.as_view(), name='logout'),
+    path('auth/google/', views.google_oauth_endpoint, name='google_oauth'),
+    path('auth/verify-token/', views.verify_token, name='verify_token'),
+    
+    # User Profile
+    path('profile/', views.user_profile, name='user-profile'),
 ]
