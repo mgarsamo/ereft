@@ -81,7 +81,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
     def get_primary_image(self, obj):
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image:
-            return primary_image.image.url
+            return primary_image.image  # image is a CharField storing Cloudinary URL
         return None
     
     def get_is_favorited(self, obj):

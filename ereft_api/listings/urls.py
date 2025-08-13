@@ -22,7 +22,13 @@ urlpatterns = [
     # API Root
     path('', views.api_root, name='api_root'),
     
-    # Router URLs - Include FIRST to ensure they work
+    # Custom Property URLs - Use different names to avoid router conflicts
+    path('featured/', views.featured_properties, name='featured-properties'),
+    path('stats/', views.property_stats, name='property-stats'),
+    path('search/', views.PropertySearchView.as_view(), name='property-search'),
+    path('track/<uuid:property_id>/', views.track_property_view, name='track-property-view'),
+    
+    # Router URLs - Include AFTER custom URLs
     path('', include(router.urls)),
     
     # Search History
