@@ -60,6 +60,20 @@
 - **Option B selected**: FileField + manual Cloudinary upload (no django-cloudinary-storage, Avoid Pillow unless switching to ImageField)
 - **Store only Cloudinary secure_url in DB**: No image processing on server
 
+## 🌐 API ENDPOINT STRUCTURE
+
+### Core Property Endpoints
+- **`/api/properties/`** - All properties (router)
+- **`/api/featured/`** - Featured properties (standalone)
+- **`/api/stats/`** - Property statistics (standalone)
+- **`/api/search/`** - Property search (standalone)
+
+### URL Pattern Rules
+- **NO duplicate endpoints** - Each feature has exactly ONE URL
+- **NO conflicting patterns** - Router and standalone views use distinct paths
+- **Consistent structure** - All endpoints use `/api/` prefix
+- **Mobile app must match** - Frontend URLs must exactly match backend URLs
+
 ## 📱 MOBILE APP STRUCTURE
 
 ### Core Screens
