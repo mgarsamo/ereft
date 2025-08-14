@@ -14,7 +14,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -52,7 +52,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'description', 'address', 'city', 'sub_city', 'kebele', 'street_name']
     ordering_fields = ['price', 'created_at', 'bedrooms', 'area_sqm']
     ordering = ['-created_at']
-    parser_classes = (MultiPartParser, FormParser)
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -69,12 +69,25 @@ class PropertyViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Ensure new listings are immediately visible and set proper defaults"""
-        serializer.save(
-            owner=self.request.user,
-            status='active',
-            is_published=True,
-            is_active=True
-        )
+        try:
+            print(f"🔧 PropertyViewSet: Creating property with data: {serializer.validated_data}")
+            print(f"🔧 PropertyViewSet: Request content type: {self.request.content_type}")
+            print(f"🔧 PropertyViewSet: Request data: {self.request.data}")
+            
+            property_obj = serializer.save(
+                owner=self.request.user,
+                status='active',
+                is_published=True,
+                is_active=True
+            )
+            
+            print(f"🔧 PropertyViewSet: Property created successfully: {property_obj.id}")
+            return property_obj
+            
+        except Exception as e:
+            print(f"🔧 PropertyViewSet: Error in perform_create: {e}")
+            print(f"🔧 PropertyViewSet: Error type: {type(e)}")
+            raise e
 
     @action(detail=True, methods=['post'])
     def favorite(self, request, pk=None):

@@ -109,18 +109,30 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
         ]
     
     def create(self, validated_data):
-        images_data = validated_data.pop('images', [])
-        property_obj = Property.objects.create(**validated_data)
-        
-        for i, image_url in enumerate(images_data):
-            PropertyImage.objects.create(
-                property=property_obj,
-                image=image_url,  # Store Cloudinary URL directly
-                is_primary=(i == 0),  # First image is primary
-                order=i
-            )
-        
-        return property_obj
+        try:
+            images_data = validated_data.pop('images', [])
+            property_obj = Property.objects.create(**validated_data)
+            
+            # Create PropertyImage objects for uploaded images
+            if images_data:
+                for i, image_url in enumerate(images_data):
+                    if image_url:  # Only create if URL is not empty
+                        try:
+                            PropertyImage.objects.create(
+                                property=property_obj,
+                                image=image_url,  # Store Cloudinary URL directly
+                                is_primary=(i == 0),  # First image is primary
+                                order=i
+                            )
+                        except Exception as img_error:
+                            print(f"🔧 PropertyCreateSerializer: Error creating PropertyImage: {img_error}")
+                            # Continue with other images even if one fails
+                            continue
+            
+            return property_obj
+        except Exception as e:
+            print(f"🔧 PropertyCreateSerializer: Error in create method: {e}")
+            raise serializers.ValidationError(f"Failed to create property: {str(e)}")
 
 class FavoriteSerializer(serializers.ModelSerializer):
     """Favorite serializer"""
