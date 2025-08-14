@@ -42,6 +42,14 @@ urlpatterns = [
     path('auth/google/', views.google_oauth_endpoint, name='google_oauth'),
     path('auth/verify-token/', views.verify_token, name='verify_token'),
     
+    # Enhanced Authentication with JWT, Email & SMS Verification
+    path('auth/enhanced-login/', views.enhanced_login, name='enhanced_login'),
+    path('auth/enhanced-register/', views.enhanced_register, name='enhanced_register'),
+    path('auth/verify-email/<str:token>/', views.verify_email, name='verify_email'),
+    path('auth/send-sms-verification/', views.send_sms_verification, name='send_sms_verification'),
+    path('auth/verify-sms-code/', views.verify_sms_code, name='verify_sms_code'),
+    path('auth/refresh-token/', views.refresh_token, name='refresh_token'),
+    
     # User Profile
     path('profile/', views.user_profile, name='user-profile'),
 ]

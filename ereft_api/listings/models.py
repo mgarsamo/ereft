@@ -17,6 +17,17 @@ class UserProfile(models.Model):
     agent_license = models.CharField(max_length=100, blank=True, null=True)
     company_name = models.CharField(max_length=200, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
+    
+    # Email verification fields
+    email_verified = models.BooleanField(default=False)
+    verification_token = models.CharField(max_length=100, blank=True, null=True)
+    verification_token_created = models.DateTimeField(blank=True, null=True)
+    
+    # SMS verification fields
+    phone_verified = models.BooleanField(default=False)
+    sms_verification_code = models.CharField(max_length=6, blank=True, null=True)
+    sms_verification_code_created = models.DateTimeField(blank=True, null=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
