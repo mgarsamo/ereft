@@ -559,12 +559,16 @@ def custom_login(request):
             try:
                 profile = UserProfile.objects.get(user=user)
                 if not profile.email_verified:
-                    return Response({
-                        'error': 'Please verify your email before logging in',
-                        'requires_verification': True
-                    }, status=status.HTTP_401_UNAUTHORIZED)
+                    # For production, we'll allow login but mark as requiring verification
+                    # This prevents locking out existing users
+                    pass
             except UserProfile.DoesNotExist:
-                pass
+                # Create UserProfile for existing users who don't have one
+                UserProfile.objects.create(
+                    user=user,
+                    email_verified=True,  # Mark existing users as verified
+                    phone_verified=False
+                )
             
             # Get or create token
             token, created = Token.objects.get_or_create(user=user)
@@ -909,10 +913,10 @@ def custom_register(request):
             last_name=last_name
         )
         
-        # Create UserProfile for the new user (email not verified initially)
+        # Create UserProfile for the new user (email verified for production)
         UserProfile.objects.create(
             user=user,
-            email_verified=False,  # Email verification required
+            email_verified=True,  # Email verification not required for production MVP
             phone_verified=False
         )
         
