@@ -12,7 +12,7 @@ from .serializers import (
     PaymentSerializer, SubscriptionSerializer, PromoCodeSerializer,
     PaymentMethodSerializer, CreatePaymentIntentSerializer
 )
-from ereft_api.listings.models import Property
+from listings.models import Property
 from django.contrib.auth import get_user_model
 
 # Configure Stripe

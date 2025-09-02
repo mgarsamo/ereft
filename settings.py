@@ -23,7 +23,7 @@ except ImportError:
 # ------------------------------------------------------
 # Base directory (used throughout for paths)
 # ------------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent
 
 # ------------------------------------------------------
 # SECURITY KEY (required for cryptographic signing)
@@ -59,8 +59,8 @@ INSTALLED_APPS = [
     'cloudinary',               # For image uploads and storage
 
     # Local apps
-    'ereft_api.listings',       # Your property listings app
-    'ereft_api.payments',       # Payment processing app
+    'listings',       # Your property listings app
+    'payments',       # Payment processing app
 ]
 
 # ------------------------------------------------------

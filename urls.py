@@ -21,8 +21,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/listings/', include('ereft_api.listings.urls')),
-    path('api/payments/', include('ereft_api.payments.urls')),
+    path('api/listings/', include('listings.urls')),
+    path('api/payments/', include('payments.urls')),
     
     # Djoser JWT Authentication endpoints
     path('api/auth/', include('djoser.urls')),
