@@ -693,7 +693,7 @@ def request_password_reset(request):
                 # Send REAL password reset email
                 try:
                     from .utils import send_password_reset_email
-                                        if send_password_reset_email(user, request):
+                    if send_password_reset_email(user, request):
                         return Response({
                             'message': 'Password reset link has been sent to your email address.'
                         })
