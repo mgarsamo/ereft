@@ -45,13 +45,13 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 class PropertyViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Property model with full CRUD operations
+    ViewSet for Property model with full CRUD operations - Simplified for debugging
     """
-    queryset = Property.objects.filter(is_active=True, is_published=True, status='active')
+    queryset = Property.objects.all()  # Simplified queryset for debugging
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['title', 'description', 'address', 'city', 'sub_city', 'kebele', 'street_name']
-    ordering_fields = ['price', 'created_at', 'bedrooms', 'area_sqm']
+    search_fields = ['title', 'description']  # Simplified search fields
+    ordering_fields = ['created_at']  # Simplified ordering
     ordering = ['-created_at']
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
@@ -376,11 +376,23 @@ def user_profile(request):
 @api_view(['GET'])
 def featured_properties(request):
     """
-    Get featured properties
+    Get featured properties - Simplified for debugging
     """
-    properties = Property.objects.filter(is_active=True, is_featured=True)[:10]
-    serializer = PropertyListSerializer(properties, many=True, context={'request': request})
-    return Response(serializer.data)
+    try:
+        # Start with simplest possible query
+        properties = Property.objects.all()[:5]
+        
+        # Simple response without serializer to test database connection
+        return Response({
+            'count': properties.count(),
+            'message': 'Featured properties endpoint working',
+            'properties': [{'id': str(p.id), 'title': p.title} for p in properties]
+        })
+    except Exception as e:
+        return Response({
+            'error': f'Database error: {str(e)}',
+            'debug': 'featured_properties endpoint'
+        }, status=500)
 
 @api_view(['GET'])
 def property_stats(request):
