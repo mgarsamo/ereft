@@ -4,9 +4,9 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
-from PIL import Image
-from io import BytesIO
-from django.core.files import File
+# from PIL import Image  # Disabled - causes build failures on Render per .cursorrules
+# from io import BytesIO
+# from django.core.files import File
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -71,30 +71,11 @@ def send_welcome_email(user):
 
 def compress_image(image_field, max_size=(800, 600), quality=85):
     """
-    Compress image before saving
+    Compress image before saving - DISABLED per .cursorrules (Pillow causes build failures)
     """
-    if image_field:
-        img = Image.open(image_field)
-        
-        # Convert to RGB if necessary
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        # Resize if larger than max_size
-        if img.size[0] > max_size[0] or img.size[1] > max_size[1]:
-            img.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        # Save compressed image
-        output = BytesIO()
-        img.save(output, format='JPEG', quality=quality, optimize=True)
-        output.seek(0)
-        
-        # Generate unique filename
-        filename = f"{uuid.uuid4()}.jpg"
-        
-        return File(output, name=filename)
-    
-    return None
+    # PIL/Pillow disabled for Render deployment
+    print("⚠️ compress_image disabled - using Cloudinary transformations instead")
+    return image_field
 
 def generate_property_slug(title, property_id):
     """
@@ -131,6 +112,7 @@ def get_property_stats():
     """
     Get basic property statistics
     """
+    from django.db import models
     from .models import Property
     
     total_properties = Property.objects.filter(is_active=True).count()
