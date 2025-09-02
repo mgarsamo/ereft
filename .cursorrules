@@ -23,9 +23,11 @@
 ## 🔐 AUTHENTICATION SYSTEM
 
 ### JWT Authentication
-- **All protected endpoints require**: `Authorization: Token <JWT>`
+- **All protected endpoints require**: `Authorization: Bearer <JWT>`
 - **Google OAuth & SMS flows must issue JWT on success**
-- **Use djangorestframework-simplejwt for JWT implementation**
+- **Use djangorestframework-simplejwt + Djoser for JWT implementation**
+- **Production JWT Secret Key**: `JWT_SECRET_KEY=JZBngesDHXkqWi8QE0Z5e4FHXMIM6_a5corWBm-vxd3qik6IUXYPr01NCKz8e6DEi-bUTOG4G8kHJtzQdi17MQ`
+- **Production Django Secret Key**: `DJANGO_SECRET_KEY=-PT3UOaDXHFGqrToLT6PAMv0uvTaBkGncM6XSuc0I8krFaZCqm0ic47ALeX0r9KGqYfThS4jM9bzmYd8dBS7rw`
 
 ### Google OAuth Flow
 - **Client IDs**: 
@@ -60,43 +62,6 @@
 - **Option B selected**: FileField + manual Cloudinary upload (no django-cloudinary-storage, Avoid Pillow unless switching to ImageField)
 - **Store only Cloudinary secure_url in DB**: No image processing on server
 
-## 🌐 API ENDPOINT STRUCTURE
-
-### Core Property Endpoints
-- **`/api/properties/`** - All properties (router - GET, POST, PUT, DELETE)
-- **`/api/featured/`** - Featured properties (standalone - GET)
-- **`/api/stats/`** - Property statistics (standalone - GET)
-- **`/api/search/`** - Property search (standalone - GET)
-
-### Router-Based Endpoints (from DefaultRouter)
-- **`/api/properties/{id}/`** - Individual property operations
-- **`/api/properties/{id}/favorite/`** - Toggle favorite (POST)
-- **`/api/properties/{id}/contact/`** - Submit contact form (POST)
-- **`/api/properties/{id}/reviews/`** - Property reviews (GET, POST)
-- **`/api/favorites/`** - Favorites management (CRUD)
-- **`/api/profile/`** - User profile management (CRUD)
-- **`/api/neighborhoods/`** - Neighborhood data (CRUD)
-
-### Authentication Endpoints
-- **`/api/auth/login/`** - User login (POST)
-- **`/api/auth/register/`** - User registration (POST)
-- **`/api/auth/token/`** - Get authentication token (POST)
-- **`/api/auth/logout/`** - User logout (POST)
-- **`/api/auth/google/`** - Google OAuth (POST)
-- **`/api/auth/verify-token/`** - Verify token validity (GET)
-
-### User & Utility Endpoints
-- **`/api/search-history/`** - Search history (GET)
-- **`/api/users/me/stats/`** - User statistics (GET)
-- **`/api/track/{id}/`** - Track property view (POST)
-- **`/api/payments/`** - Payment processing (POST)
-
-### URL Pattern Rules
-- **NO duplicate endpoints** - Each feature has exactly ONE URL
-- **NO conflicting patterns** - Router and standalone views use distinct paths
-- **Consistent structure** - All endpoints use `/api/` prefix
-- **Mobile app must match** - Frontend URLs must exactly match backend URLs
-- **Authentication header** - Use `Authorization: Token <token>` (not Bearer)
 
 ## 📱 MOBILE APP STRUCTURE
 
@@ -120,6 +85,12 @@
 - **No Hardcoded Values**: All configuration must use environment variables
 - **No Development Shortcuts**: Production-ready code only
 - **No Mock Data**: Use real backend APIs and database
+
+### Production-Only Rule (NON-NEGOTIABLE)
+- **NEVER FALL BACK TO LOCAL/TEST**: All code must work in production environment
+- **NO LOCALHOST CONFIGURATIONS**: Never change API_BASE_URL to localhost or test servers
+- **PRODUCTION-FIRST APPROACH**: All testing and development must use production endpoints
+- **NO DEVELOPMENT FALLBACKS**: Never create local/test alternatives to production features
 
 ### Build Dependencies
 - **Avoid Pillow**: Causes build failures on Render (Python 3.11 compatibility)

@@ -3,11 +3,10 @@
 import os
 import sys
 
-# ✅ For flat layout: settings.py is in the same directory as manage.py
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
 
 def main():
     """Run administrative tasks."""
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ereft_api.settings')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
@@ -17,6 +16,7 @@ def main():
             "forget to activate a virtual environment?"
         ) from exc
     execute_from_command_line(sys.argv)
+
 
 if __name__ == '__main__':
     main()

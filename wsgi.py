@@ -1,9 +1,16 @@
-# FILE: ereft_api/wsgi.py
+"""
+WSGI config for ereft project.
+
+It exposes the WSGI callable as a module-level variable named ``application``.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/5.1/howto/deployment/wsgi/
+"""
 
 import os
+
 from django.core.wsgi import get_wsgi_application
 
-# ✅ Use the flat layout module path — settings.py is in the same folder
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ereft_api.settings')
 
 application = get_wsgi_application()

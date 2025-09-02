@@ -8,6 +8,12 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 from django.contrib.auth.views import LogoutView
 from . import views
+from .auth_views import (
+    CustomTokenObtainPairView, 
+    CustomTokenRefreshView,
+    custom_jwt_login,
+    custom_jwt_register
+)
 from django.http import JsonResponse
 from datetime import datetime
 
@@ -41,6 +47,15 @@ urlpatterns = [
     path('auth/logout/', LogoutView.as_view(), name='logout'),
     path('auth/google/', views.google_oauth_endpoint, name='google_oauth'),
     path('auth/verify-token/', views.verify_token, name='verify_token'),
+    
+    # Production JWT Authentication Endpoints
+    path('auth/jwt/login/', custom_jwt_login, name='jwt_login'),
+    path('auth/jwt/register/', custom_jwt_register, name='jwt_register'),
+    path('auth/jwt/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('auth/jwt/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    
+    # OAuth redirect endpoint (for Google OAuth redirect)
+    path('oauth/', views.google_oauth_endpoint, name='oauth_redirect'),
     
     # Enhanced Authentication with JWT, Email & SMS Verification
     path('auth/enhanced-login/', views.enhanced_login, name='enhanced_login'),

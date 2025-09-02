@@ -51,13 +51,16 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',           # For building RESTful APIs
     'rest_framework.authtoken', # For token-based auth
+    'rest_framework_simplejwt', # For JWT authentication
+    'rest_framework_simplejwt.token_blacklist', # For JWT token blacklisting
+    'djoser',                   # For enhanced JWT authentication endpoints
     # 'django_filters',           # Removed for deployment
     'corsheaders',              # For CORS support (mobile apps)
     'cloudinary',               # For image uploads and storage
 
     # Local apps
-    'listings',                 # Your property listings app
-    'payments',                 # Payment processing app
+    'ereft_api.listings',       # Your property listings app
+    'ereft_api.payments',       # Payment processing app
 ]
 
 # ------------------------------------------------------
@@ -99,7 +102,10 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# CSRF settings for API
+# CSRF settings for API - Disabled for JWT authentication
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)  # True in production
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access for mobile apps
+CSRF_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests for mobile apps
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
     default='https://ereft-api.onrender.com,https://*.onrender.com,https://*.ngrok-free.app',
@@ -216,9 +222,13 @@ REST_FRAMEWORK = {
 }
 
 # ------------------------------------------------------
-# JWT Configuration
+# JWT Configuration - Production Ready
 # ------------------------------------------------------
 from datetime import timedelta
+
+# JWT Secret Key (use environment variable for production)
+JWT_SECRET_KEY = config('JWT_SECRET_KEY', default=SECRET_KEY)
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=7),  # 7 days for mobile app
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # 30 days
@@ -226,10 +236,10 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
+    'SIGNING_KEY': JWT_SECRET_KEY,  # Use dedicated JWT secret key
     'VERIFYING_KEY': None,
     'AUDIENCE': None,
-    'ISSUER': None,
+    'ISSUER': 'ereft-api',
     'JWK_URL': None,
     'LEEWAY': 0,
     'AUTH_HEADER_TYPES': ('Bearer',),
@@ -250,6 +260,35 @@ SIMPLE_JWT = {
 }
 
 # ------------------------------------------------------
+# Djoser Configuration - Enhanced JWT Authentication
+# ------------------------------------------------------
+DJOSER = {
+    'LOGIN_FIELD': 'email',
+    'USER_CREATE_PASSWORD_RETYPE': True,
+    'USERNAME_CHANGED_EMAIL_CONFIRMATION': True,
+    'PASSWORD_CHANGED_EMAIL_CONFIRMATION': True,
+    'SEND_CONFIRMATION_EMAIL': True,
+    'SET_USERNAME_RETYPE': True,
+    'SET_PASSWORD_RETYPE': True,
+    'PASSWORD_RESET_CONFIRM_URL': 'password/reset/confirm/{uid}/{token}',
+    'USERNAME_RESET_CONFIRM_URL': 'username/reset/confirm/{uid}/{token}',
+    'ACTIVATION_URL': 'activate/{uid}/{token}',
+    'SEND_ACTIVATION_EMAIL': True,
+    'SERIALIZERS': {
+        'user_create': 'djoser.serializers.UserCreateSerializer',
+        'user': 'djoser.serializers.UserSerializer',
+        'current_user': 'djoser.serializers.UserSerializer',
+        'user_delete': 'djoser.serializers.UserDeleteSerializer',
+    },
+    'PERMISSIONS': {
+        'user': ['rest_framework.permissions.IsAuthenticated'],
+        'user_list': ['rest_framework.permissions.IsAuthenticated'],
+    },
+    'HIDE_USERS': False,
+    'TOKEN_MODEL': None,  # Use JWT tokens instead of Djoser tokens
+}
+
+# ------------------------------------------------------
 # Email Configuration for Verification
 # ------------------------------------------------------
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -266,6 +305,23 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@ereft.com')
 TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
 TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
 TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='')
+
+# ------------------------------------------------------
+# Security Settings for Production
+# ------------------------------------------------------
+# Session settings
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)  # True in production
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+# Security headers
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_REDIRECT_EXEMPT = []
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)  # True in production
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ------------------------------------------------------
 # Default primary key field type

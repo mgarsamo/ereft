@@ -22,6 +22,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.crypto import get_random_string
 from django.utils import timezone
+from django.http import HttpResponse
 from datetime import timedelta
 import json
 import requests
@@ -530,6 +531,190 @@ def custom_login(request):
         status=status.HTTP_401_UNAUTHORIZED
     )
 
+def process_google_oauth_code(code, request):
+    """
+    Process Google OAuth authorization code and return appropriate response
+    """
+    try:
+        print(f"🔐 Processing Google OAuth code: {code[:10]}...")
+        
+        # Google OAuth configuration
+        GOOGLE_CLIENT_ID = '91486871350-79fvub6490473eofjpu1jjlhncuiua44.apps.googleusercontent.com'
+        GOOGLE_CLIENT_SECRET = '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'
+        
+        # Exchange authorization code for access token
+        token_url = 'https://oauth2.googleapis.com/token'
+        token_data = {
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': 'https://ereft.onrender.com/oauth'
+        }
+        
+        print(f"🔐 Google OAuth: Exchanging code for token...")
+        token_response = requests.post(token_url, data=token_data)
+        token_response.raise_for_status()
+        token_info = token_response.json()
+        
+        access_token = token_info.get('access_token')
+        if not access_token:
+            return HttpResponse("""
+            <html>
+            <head><title>OAuth Error</title></head>
+            <body>
+                <h2>OAuth Error</h2>
+                <p>Failed to obtain access token from Google</p>
+            </body>
+            </html>
+            """)
+        
+        print(f"🔐 Google OAuth: Access token obtained, fetching user info...")
+        
+        # Get user info from Google
+        user_info_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
+        headers = {'Authorization': f'Bearer {access_token}'}
+        user_response = requests.get(user_info_url, headers=headers)
+        user_response.raise_for_status()
+        user_info = user_response.json()
+        
+        # Extract user information
+        google_id = user_info.get('id')
+        email = user_info.get('email')
+        first_name = user_info.get('given_name', '')
+        last_name = user_info.get('family_name', '')
+        profile_picture = user_info.get('picture')
+        
+        if not email:
+            return HttpResponse("""
+            <html>
+            <head><title>OAuth Error</title></head>
+            <body>
+                <h2>OAuth Error</h2>
+                <p>Email is required from Google OAuth</p>
+            </body>
+            </html>
+            """)
+        
+        print(f"🔐 Google OAuth: User info received: {email}")
+        
+        # Check if user already exists
+        try:
+            user = User.objects.get(email=email)
+            print(f"🔐 Google OAuth: Existing user found: {user.username}")
+            
+            # Update existing user info
+            user.first_name = first_name
+            user.last_name = last_name
+            user.save()
+            
+        except User.DoesNotExist:
+            # Create new user
+            username = f"google_{google_id}" if google_id else f"google_{email.split('@')[0]}"
+            
+            # Ensure username is unique
+            base_username = username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}_{counter}"
+                counter += 1
+            
+            print(f"🔐 Google OAuth: Creating new user: {username}")
+            
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                password=None  # No password for OAuth users
+            )
+            
+            # Create UserProfile for Google OAuth user
+            UserProfile.objects.create(
+                user=user,
+                email_verified=True,  # Google OAuth users are pre-verified
+                phone_verified=False,
+                profile_picture=profile_picture
+            )
+        
+        # Generate or get existing token
+        token, created = Token.objects.get_or_create(user=user)
+        
+        print(f"🔐 Google OAuth: Authentication successful for user: {user.username}")
+        
+        # For GET requests (redirect from Google), redirect to mobile app with deep link
+        if request.method == 'GET':
+            # Create deep link with authentication data
+            deep_link = f"ereft://oauth?token={token.key}&user_id={user.id}&email={email}&first_name={first_name}&last_name={last_name}&google_id={google_id}"
+            
+            return HttpResponse(f"""
+            <html>
+            <head><title>OAuth Success</title></head>
+            <body>
+                <h2>Authentication Successful!</h2>
+                <p>Welcome, {first_name} {last_name}!</p>
+                <p>Email: {email}</p>
+                <p>Authentication Token: {token.key}</p>
+                <p>User ID: {user.id}</p>
+                <p>Redirecting to app...</p>
+                <script>
+                    setTimeout(() => {{
+                        window.location.href = "{deep_link}";
+                    }}, 2000);
+                </script>
+            </body>
+            </html>
+            """)
+        
+        # For POST requests (from mobile app), return JSON response
+        else:
+            return Response({
+                'token': token.key,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'profile_picture': profile_picture,
+                    'provider': 'google',
+                    'google_id': google_id
+                }
+            })
+        
+    except requests.RequestException as e:
+        print(f"🔐 Google OAuth: Google API request failed: {str(e)}")
+        if request.method == 'GET':
+            return HttpResponse(f"""
+            <html>
+            <head><title>OAuth Error</title></head>
+            <body>
+                <h2>OAuth Error</h2>
+                <p>Google API request failed: {str(e)}</p>
+            </body>
+            </html>
+            """)
+        else:
+            return Response({
+                'error': f'Google API request failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as e:
+        print(f"🔐 Google OAuth: Unexpected error: {str(e)}")
+        if request.method == 'GET':
+            return HttpResponse(f"""
+            <html>
+            <head><title>OAuth Error</title></head>
+            <body>
+                <h2>OAuth Error</h2>
+                <p>Unexpected error: {str(e)}</p>
+            </body>
+            </html>
+            """)
+        else:
+            return Response({
+                'error': f'Unexpected error: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['POST'])
 @permission_classes([])
 def custom_register(request):
@@ -570,6 +755,13 @@ def custom_register(request):
         last_name=last_name
     )
     
+    # Create UserProfile for the new user
+    UserProfile.objects.create(
+        user=user,
+        email_verified=True,  # For now, assume email is verified
+        phone_verified=False
+    )
+    
     # Create token
     token, created = Token.objects.get_or_create(user=user)
     
@@ -584,137 +776,92 @@ def custom_register(request):
         }
     }, status=status.HTTP_201_CREATED)
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([])
 @csrf_exempt
 def google_oauth_endpoint(request):
     """
     Handle Google OAuth authentication
-    Receives authorization code and exchanges it for user data
+    GET: Handles redirect from Google OAuth (for mobile app deep linking)
+    POST: Receives authorization code from mobile app
     """
     try:
         print(f"🔐 Google OAuth endpoint called with method: {request.method}")
         
-        # Get authorization code from request
-        code = request.data.get('code')
-        redirect_uri = request.data.get('redirect_uri')
+        # Handle GET request (redirect from Google)
+        if request.method == 'GET':
+            code = request.GET.get('code')
+            error = request.GET.get('error')
+            
+            if error:
+                print(f"🔐 Google OAuth error: {error}")
+                # Redirect to mobile app with error
+                error_url = f"ereft://oauth?error={error}"
+                return HttpResponse(f"""
+                <html>
+                <head><title>OAuth Error</title></head>
+                <body>
+                    <h2>OAuth Error</h2>
+                    <p>Error: {error}</p>
+                    <p>Redirecting to app...</p>
+                    <script>
+                        setTimeout(() => {{
+                            window.location.href = "{error_url}";
+                        }}, 2000);
+                    </script>
+                </body>
+                </html>
+                """)
+            
+            if not code:
+                return HttpResponse("""
+                <html>
+                <head><title>OAuth Error</title></head>
+                <body>
+                    <h2>OAuth Error</h2>
+                    <p>No authorization code received</p>
+                </body>
+                </html>
+                """)
+            
+            # Process the authorization code
+            return process_google_oauth_code(code, request)
         
-        if not code:
+        # Handle POST request (from mobile app)
+        elif request.method == 'POST':
+            # Get authorization code from request
+            code = request.data.get('code')
+            redirect_uri = request.data.get('redirect_uri')
+            
+            if not code:
+                return Response({
+                    'error': 'Authorization code is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Process the authorization code
+            return process_google_oauth_code(code, request)
+        
+        else:
             return Response({
-                'error': 'Authorization code is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'error': 'Method not allowed'
+            }, status=status.HTTP_405_METHOD_NOT_ALLOWED)
         
-        print(f"🔐 Google OAuth: Processing code for redirect_uri: {redirect_uri}")
-        
-        # Google OAuth configuration
-        GOOGLE_CLIENT_ID = '91486871350-79fvub6490473eofjpu1jjlhncuiua44.apps.googleusercontent.com'
-        GOOGLE_CLIENT_SECRET = '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'
-        
-        # Exchange authorization code for access token
-        token_url = 'https://oauth2.googleapis.com/token'
-        token_data = {
-            'client_id': GOOGLE_CLIENT_ID,
-            'client_secret': GOOGLE_CLIENT_SECRET,
-            'code': code,
-            'grant_type': 'authorization_code',
-            'redirect_uri': redirect_uri or 'https://ereft.onrender.com/oauth'
-        }
-        
-        print(f"🔐 Google OAuth: Exchanging code for token...")
-        token_response = requests.post(token_url, data=token_data)
-        token_response.raise_for_status()
-        token_info = token_response.json()
-        
-        access_token = token_info.get('access_token')
-        if not access_token:
-            return Response({
-                'error': 'Failed to obtain access token from Google'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        print(f"🔐 Google OAuth: Access token obtained, fetching user info...")
-        
-        # Get user info from Google
-        user_info_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
-        headers = {'Authorization': f'Bearer {access_token}'}
-        user_response = requests.get(user_info_url, headers=headers)
-        user_response.raise_for_status()
-        user_info = user_response.json()
-        
-        # Extract user information
-        google_id = user_info.get('id')
-        email = user_info.get('email')
-        first_name = user_info.get('given_name', '')
-        last_name = user_info.get('family_name', '')
-        profile_picture = user_info.get('picture')
-        
-        if not email:
-            return Response({
-                'error': 'Email is required from Google OAuth'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        print(f"🔐 Google OAuth: User info received: {email}")
-        
-        # Check if user already exists
-        try:
-            user = User.objects.get(email=email)
-            print(f"🔐 Google OAuth: Existing user found: {user.username}")
-            
-            # Update existing user info
-            user.first_name = first_name
-            user.last_name = last_name
-            user.save()
-            
-        except User.DoesNotExist:
-            # Create new user
-            username = f"google_{google_id}" if google_id else f"google_{email.split('@')[0]}"
-            
-            # Ensure username is unique
-            base_username = username
-            counter = 1
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}_{counter}"
-                counter += 1
-            
-            print(f"🔐 Google OAuth: Creating new user: {username}")
-            
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                first_name=first_name,
-                last_name=last_name,
-                password=None  # No password for OAuth users
-            )
-        
-        # Generate or get existing token
-        token, created = Token.objects.get_or_create(user=user)
-        
-        print(f"🔐 Google OAuth: Authentication successful for user: {user.username}")
-        
-        # Return user data and token
-        return Response({
-            'token': token.key,
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'profile_picture': profile_picture,
-                'provider': 'google',
-                'google_id': google_id
-            }
-        })
-        
-    except requests.RequestException as e:
-        print(f"🔐 Google OAuth: Google API request failed: {str(e)}")
-        return Response({
-            'error': f'Google API request failed: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     except Exception as e:
         print(f"🔐 Google OAuth: Unexpected error: {str(e)}")
-        return Response({
-            'error': f'Unexpected error: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        if request.method == 'GET':
+            return HttpResponse(f"""
+            <html>
+            <head><title>OAuth Error</title></head>
+            <body>
+                <h2>OAuth Error</h2>
+                <p>Unexpected error: {str(e)}</p>
+            </body>
+            </html>
+            """)
+        else:
+            return Response({
+                'error': f'Unexpected error: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
