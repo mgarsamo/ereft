@@ -28,6 +28,11 @@ class UserProfile(models.Model):
     sms_verification_code = models.CharField(max_length=6, blank=True, null=True)
     sms_verification_code_created = models.DateTimeField(blank=True, null=True)
     
+    # Account security fields
+    is_locked = models.BooleanField(default=False)
+    lockout_until = models.DateTimeField(blank=True, null=True)
+    failed_login_attempts = models.PositiveIntegerField(default=0)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

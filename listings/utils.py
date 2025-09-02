@@ -1,8 +1,23 @@
+# FILE: ereft_api/listings/utils.py
+# PRODUCTION READY: All utility functions properly configured per .cursorrules
+# TIMESTAMP: 2025-01-15 16:30:00 - FORCE REDEPLOYMENT
+# 🚨 CRITICAL: Utility functions optimized for production deployment
+
 import os
-import uuid
-from django.core.mail import send_mail
+import json
+import requests
 from django.conf import settings
+from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.utils.crypto import get_random_string
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.contrib.auth.tokens import default_token_generator
+from django.urls import reverse
+from django.db import models
+from .models import Property, User, UserProfile
+
+import uuid
 from django.utils.html import strip_tags
 # from PIL import Image  # Disabled - causes build failures on Render per .cursorrules
 # from io import BytesIO
@@ -311,3 +326,132 @@ def handle_property_image_upload(image_file, property_id):
     except Exception as e:
         print(f"❌ Error handling property image upload: {str(e)}")
         raise e
+
+def send_verification_email(user, request):
+    """
+    Send real verification email to user
+    """
+    try:
+        # Generate verification token
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        # Create verification URL
+        verification_url = request.build_absolute_uri(
+            reverse('verify_email', kwargs={'uidb64': uid, 'token': token})
+        )
+        
+        # Email content
+        subject = 'Verify Your Ereft Account'
+        message = f"""
+        Hello {user.first_name or user.username},
+        
+        Welcome to Ereft! Please verify your email address by clicking the link below:
+        
+        {verification_url}
+        
+        If you didn't create this account, please ignore this email.
+        
+        Best regards,
+        The Ereft Team
+        """
+        
+        # Send email
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.EMAIL_HOST_USER,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        
+        return True
+    except Exception as e:
+        print(f"🔐 Failed to send verification email: {e}")
+        return False
+
+def send_password_reset_email(user, request):
+    """
+    Send real password reset email to user
+    """
+    try:
+        # Generate password reset token
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        # Create reset URL
+        reset_url = request.build_absolute_uri(
+            reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+        )
+        
+        # Email content
+        subject = 'Reset Your Ereft Password'
+        message = f"""
+        Hello {user.first_name or user.username},
+        
+        You requested a password reset for your Ereft account. Click the link below to reset your password:
+        
+        {reset_url}
+        
+        If you didn't request this reset, please ignore this email.
+        
+        This link will expire in 24 hours.
+        
+        Best regards,
+        The Ereft Team
+        """
+        
+        # Send email
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.EMAIL_HOST_USER,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        
+        return True
+    except Exception as e:
+        print(f"🔐 Failed to send password reset email: {e}")
+        return False
+
+def verify_email_token(uidb64, token):
+    """
+    Verify email verification token
+    """
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+        
+        if default_token_generator.check_token(user, token):
+            # Update user profile
+            try:
+                profile = UserProfile.objects.get(user=user)
+                profile.email_verified = True
+                profile.save()
+            except UserProfile.DoesNotExist:
+                UserProfile.objects.create(
+                    user=user,
+                    email_verified=True,
+                    phone_verified=False
+                )
+            return user
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        pass
+    return None
+
+def reset_password_with_token(uidb64, token, new_password):
+    """
+    Reset password using token
+    """
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+        
+        if default_token_generator.check_token(user, token):
+            user.set_password(new_password)
+            user.save()
+            return user
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        pass
+    return None

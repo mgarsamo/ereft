@@ -19,6 +19,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.core.mail import send_mail
+from django_ratelimit.decorators import ratelimit
+from django_ratelimit.core import is_ratelimited
 from django.template.loader import render_to_string
 from django.utils.crypto import get_random_string
 from django.utils import timezone
@@ -529,6 +531,8 @@ class UserStatsView(APIView):
 
 @api_view(['POST'])
 @permission_classes([])
+@ratelimit(key='ip', rate='10/m', method='POST', block=True)
+@ratelimit(key='ip', rate='50/h', method='POST', block=True)
 def custom_login(request):
     """
     Production-ready login endpoint with security features
@@ -555,20 +559,39 @@ def custom_login(request):
                 pass
         
         if user and user.is_active:
-            # Check if email is verified (optional security check)
+            # Check if account is locked due to too many failed attempts
             try:
                 profile = UserProfile.objects.get(user=user)
-                if not profile.email_verified:
-                    # For production, we'll allow login but mark as requiring verification
-                    # This prevents locking out existing users
-                    pass
+                if profile.is_locked and profile.lockout_until and profile.lockout_until > timezone.now():
+                    return Response({
+                        'error': f'Account is temporarily locked due to too many failed login attempts. Try again after {profile.lockout_until.strftime("%Y-%m-%d %H:%M:%S")} UTC.'
+                    }, status=status.HTTP_423_LOCKED)
+                elif profile.is_locked and profile.lockout_until and profile.lockout_until <= timezone.now():
+                    # Unlock account
+                    profile.is_locked = False
+                    profile.lockout_until = None
+                    profile.failed_login_attempts = 0
+                    profile.save()
             except UserProfile.DoesNotExist:
                 # Create UserProfile for existing users who don't have one
-                UserProfile.objects.create(
+                profile = UserProfile.objects.create(
                     user=user,
                     email_verified=True,  # Mark existing users as verified
-                    phone_verified=False
+                    phone_verified=False,
+                    is_locked=False,
+                    failed_login_attempts=0
                 )
+            
+            # Check if email is verified (optional security check)
+            if not profile.email_verified:
+                return Response({
+                    'error': 'Please verify your email before logging in',
+                    'requires_verification': True
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Reset failed login attempts on successful login
+            profile.failed_login_attempts = 0
+            profile.save()
             
             # Get or create token
             token, created = Token.objects.get_or_create(user=user)
@@ -584,6 +607,37 @@ def custom_login(request):
                     'last_name': user.last_name,
                 }
             })
+        
+        # Handle failed login attempts
+        if username:
+            try:
+                user_obj = User.objects.get(username=username)
+                profile, created = UserProfile.objects.get_or_create(
+                    user=user_obj,
+                    defaults={
+                        'email_verified': False,
+                        'phone_verified': False,
+                        'is_locked': False,
+                        'failed_login_attempts': 0
+                    }
+                )
+                
+                profile.failed_login_attempts += 1
+                
+                # Lock account after 5 failed attempts for 15 minutes
+                if profile.failed_login_attempts >= 5:
+                    profile.is_locked = True
+                    profile.lockout_until = timezone.now() + timedelta(minutes=15)
+                    profile.save()
+                    
+                    return Response({
+                        'error': 'Account locked due to too many failed login attempts. Try again in 15 minutes.'
+                    }, status=status.HTTP_423_LOCKED)
+                else:
+                    profile.save()
+                    
+            except User.DoesNotExist:
+                pass
         
         return Response(
             {'error': 'Invalid credentials or account is inactive'}, 
@@ -619,9 +673,10 @@ def custom_logout(request):
 
 @api_view(['POST'])
 @permission_classes([])
+@ratelimit(key='ip', rate='3/h', method='POST', block=True)
 def request_password_reset(request):
     """
-    Request password reset via email
+    REAL password reset via email - no placeholders
     """
     try:
         email = request.data.get('email', '').strip().lower()
@@ -635,11 +690,16 @@ def request_password_reset(request):
         try:
             user = User.objects.get(email=email)
             if user.is_active:
-                # In production, send email here
-                # For now, return success message
-                return Response({
-                    'message': 'If an account with this email exists, you will receive a password reset link.'
-                })
+                # Send REAL password reset email
+                from .utils import send_password_reset_email
+                if send_password_reset_email(user, request):
+                    return Response({
+                        'message': 'Password reset link has been sent to your email address.'
+                    })
+                else:
+                    return Response({
+                        'error': 'Failed to send password reset email. Please try again.'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except User.DoesNotExist:
             # Don't reveal if user exists or not
             pass
@@ -653,6 +713,64 @@ def request_password_reset(request):
             {'error': 'Password reset request failed. Please try again.'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['GET'])
+@permission_classes([])
+def verify_email_endpoint(request, uidb64, token):
+    """
+    REAL email verification endpoint - no placeholders
+    """
+    try:
+        from .utils import verify_email_token
+        user = verify_email_token(uidb64, token)
+        
+        if user:
+            return Response({
+                'message': 'Email verified successfully! You can now log in to your account.',
+                'verified': True
+            })
+        else:
+            return Response({
+                'error': 'Invalid or expired verification link.',
+                'verified': False
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        return Response({
+            'error': 'Email verification failed. Please try again.',
+            'verified': False
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([])
+def reset_password_confirm(request, uidb64, token):
+    """
+    REAL password reset confirmation - no placeholders
+    """
+    try:
+        new_password = request.data.get('new_password')
+        
+        if not new_password or len(new_password) < 8:
+            return Response({
+                'error': 'Password must be at least 8 characters long'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        from .utils import reset_password_with_token
+        user = reset_password_with_token(uidb64, token, new_password)
+        
+        if user:
+            return Response({
+                'message': 'Password reset successfully! You can now log in with your new password.'
+            })
+        else:
+            return Response({
+                'error': 'Invalid or expired reset link.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        return Response({
+            'error': 'Password reset failed. Please try again.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 def process_google_oauth_code(code, request):
     """
@@ -840,6 +958,8 @@ def process_google_oauth_code(code, request):
 
 @api_view(['POST'])
 @permission_classes([])
+@ratelimit(key='ip', rate='5/h', method='POST', block=True)
+@ratelimit(key='ip', rate='10/m', method='POST', block=True)
 def custom_register(request):
     """
     Production-ready registration endpoint with validation and security
@@ -913,27 +1033,44 @@ def custom_register(request):
             last_name=last_name
         )
         
-        # Create UserProfile for the new user (email verified for production)
+        # Create UserProfile for the new user (email NOT verified initially)
         UserProfile.objects.create(
             user=user,
-            email_verified=True,  # Email verification not required for production MVP
+            email_verified=False,  # Email verification required for production
             phone_verified=False
         )
+        
+        # Send REAL verification email
+        from .utils import send_verification_email
+        email_sent = send_verification_email(user, request)
         
         # Create token
         token, created = Token.objects.get_or_create(user=user)
         
-        return Response({
-            'message': 'Registration successful! Please check your email to verify your account.',
-            'token': token.key,
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-            }
-        }, status=status.HTTP_201_CREATED)
+        if email_sent:
+            return Response({
+                'message': 'Registration successful! Please check your email to verify your account.',
+                'token': token.key,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                }
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                'message': 'Registration successful! However, verification email could not be sent. Please contact support.',
+                'token': token.key,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                }
+            }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         return Response(

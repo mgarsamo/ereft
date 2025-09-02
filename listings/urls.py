@@ -51,6 +51,8 @@ urlpatterns = [
     path('auth/google/', views.google_oauth_endpoint, name='google_oauth'),
     path('auth/verify-token/', views.verify_token, name='verify_token'),
     path('auth/password-reset/', views.request_password_reset, name='password_reset'),
+    path('auth/verify-email/<str:uidb64>/<str:token>/', views.verify_email_endpoint, name='verify_email'),
+    path('auth/reset-password/<str:uidb64>/<str:token>/', views.reset_password_confirm, name='password_reset_confirm'),
     
     # Production JWT Authentication Endpoints
     path('auth/jwt/login/', custom_jwt_login, name='jwt_login'),
