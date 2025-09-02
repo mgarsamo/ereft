@@ -15,7 +15,12 @@ except ImportError:
         value = os.environ.get(key, default)
         if cast and value is not None:
             if cast == bool:
-                return value.lower() in ('true', '1', 'yes', 'on')
+                # Handle case where default is already a boolean
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, str):
+                    return value.lower() in ('true', '1', 'yes', 'on')
+                return bool(value)
             elif callable(cast):
                 return cast(value)
         return value
