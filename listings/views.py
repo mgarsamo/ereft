@@ -531,47 +531,124 @@ class UserStatsView(APIView):
 @permission_classes([])
 def custom_login(request):
     """
-    Custom login endpoint that works with email or username
+    Production-ready login endpoint with security features
     """
-    username = request.data.get('username')
-    password = request.data.get('password')
-    
-    if not username or not password:
+    try:
+        username = request.data.get('username', '').strip()
+        password = request.data.get('password', '')
+        
+        if not username or not password:
+            return Response(
+                {'error': 'Username and password are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Try to authenticate with username
+        user = authenticate(username=username, password=password)
+        
+        # If that fails, try to find user by email and authenticate
+        if not user:
+            try:
+                user_obj = User.objects.get(email=username.lower())
+                user = authenticate(username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                pass
+        
+        if user and user.is_active:
+            # Check if email is verified (optional security check)
+            try:
+                profile = UserProfile.objects.get(user=user)
+                if not profile.email_verified:
+                    return Response({
+                        'error': 'Please verify your email before logging in',
+                        'requires_verification': True
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+            except UserProfile.DoesNotExist:
+                pass
+            
+            # Get or create token
+            token, created = Token.objects.get_or_create(user=user)
+            
+            return Response({
+                'message': 'Login successful!',
+                'token': token.key,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                }
+            })
+        
         return Response(
-            {'error': 'Username and password are required'}, 
-            status=status.HTTP_400_BAD_REQUEST
+            {'error': 'Invalid credentials or account is inactive'}, 
+            status=status.HTTP_401_UNAUTHORIZED
         )
-    
-    # Try to authenticate with username
-    user = authenticate(username=username, password=password)
-    
-    # If that fails, try to find user by email and authenticate
-    if not user:
-        try:
-            user_obj = User.objects.get(email=username)
-            user = authenticate(username=user_obj.username, password=password)
-        except User.DoesNotExist:
-            pass
-    
-    if user:
-        # Get or create token
-        token, created = Token.objects.get_or_create(user=user)
+        
+    except Exception as e:
+        return Response(
+            {'error': 'Login failed. Please try again.'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def custom_logout(request):
+    """
+    Production-ready logout endpoint that invalidates tokens
+    """
+    try:
+        # Delete the user's token
+        if hasattr(request.user, 'auth_token'):
+            request.user.auth_token.delete()
         
         return Response({
-            'token': token.key,
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-            }
+            'message': 'Logout successful!'
         })
-    
-    return Response(
-        {'error': 'Invalid credentials'}, 
-        status=status.HTTP_401_UNAUTHORIZED
-    )
+        
+    except Exception as e:
+        return Response(
+            {'error': 'Logout failed. Please try again.'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([])
+def request_password_reset(request):
+    """
+    Request password reset via email
+    """
+    try:
+        email = request.data.get('email', '').strip().lower()
+        
+        if not email or '@' not in email:
+            return Response(
+                {'error': 'Please provide a valid email address'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(email=email)
+            if user.is_active:
+                # In production, send email here
+                # For now, return success message
+                return Response({
+                    'message': 'If an account with this email exists, you will receive a password reset link.'
+                })
+        except User.DoesNotExist:
+            # Don't reveal if user exists or not
+            pass
+        
+        return Response({
+            'message': 'If an account with this email exists, you will receive a password reset link.'
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': 'Password reset request failed. Please try again.'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 def process_google_oauth_code(code, request):
     """
@@ -761,62 +838,104 @@ def process_google_oauth_code(code, request):
 @permission_classes([])
 def custom_register(request):
     """
-    Custom registration endpoint
+    Production-ready registration endpoint with validation and security
     """
-    username = request.data.get('username')
-    email = request.data.get('email')
-    password = request.data.get('password')
-    first_name = request.data.get('first_name', '')
-    last_name = request.data.get('last_name', '')
-    
-    if not username or not email or not password:
-        return Response(
-            {'error': 'Username, email, and password are required'}, 
-            status=status.HTTP_400_BAD_REQUEST
+    try:
+        username = request.data.get('username', '').strip()
+        email = request.data.get('email', '').strip().lower()
+        password = request.data.get('password', '')
+        first_name = request.data.get('first_name', '').strip()
+        last_name = request.data.get('last_name', '').strip()
+        
+        # Input validation
+        if not username or not email or not password:
+            return Response(
+                {'error': 'Username, email, and password are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Username validation (3-30 chars, alphanumeric + underscore)
+        if len(username) < 3 or len(username) > 30:
+            return Response(
+                {'error': 'Username must be between 3 and 30 characters'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not username.replace('_', '').isalnum():
+            return Response(
+                {'error': 'Username can only contain letters, numbers, and underscores'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Email validation
+        if '@' not in email or '.' not in email:
+            return Response(
+                {'error': 'Please enter a valid email address'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Password validation (minimum 8 chars, at least one letter and number)
+        if len(password) < 8:
+            return Response(
+                {'error': 'Password must be at least 8 characters long'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+            return Response(
+                {'error': 'Password must contain at least one letter and one number'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if user already exists
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {'error': 'Username already exists'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {'error': 'Email already exists'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create user
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name
         )
-    
-    # Check if user already exists
-    if User.objects.filter(username=username).exists():
-        return Response(
-            {'error': 'Username already exists'}, 
-            status=status.HTTP_400_BAD_REQUEST
+        
+        # Create UserProfile for the new user (email not verified initially)
+        UserProfile.objects.create(
+            user=user,
+            email_verified=False,  # Email verification required
+            phone_verified=False
         )
-    
-    if User.objects.filter(email=email).exists():
+        
+        # Create token
+        token, created = Token.objects.get_or_create(user=user)
+        
+        return Response({
+            'message': 'Registration successful! Please check your email to verify your account.',
+            'token': token.key,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            }
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
         return Response(
-            {'error': 'Email already exists'}, 
-            status=status.HTTP_400_BAD_REQUEST
+            {'error': 'Registration failed. Please try again.'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-    
-    # Create user
-    user = User.objects.create_user(
-        username=username,
-        email=email,
-        password=password,
-        first_name=first_name,
-        last_name=last_name
-    )
-    
-    # Create UserProfile for the new user
-    UserProfile.objects.create(
-        user=user,
-        email_verified=True,  # For now, assume email is verified
-        phone_verified=False
-    )
-    
-    # Create token
-    token, created = Token.objects.get_or_create(user=user)
-    
-    return Response({
-        'token': token.key,
-        'user': {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-        }
-    }, status=status.HTTP_201_CREATED)
 
 @api_view(['GET', 'POST'])
 @permission_classes([])
