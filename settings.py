@@ -345,15 +345,7 @@ LOGOUT_REDIRECT_URL = '/api/'
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 
-# ------------------------------------------------------
-# Email Configuration (for development)
-# ------------------------------------------------------
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-EMAIL_HOST = 'localhost'
-EMAIL_PORT = 1025
-EMAIL_USE_TLS = False
-EMAIL_HOST_USER = ''
-EMAIL_HOST_PASSWORD = ''
+# Email configuration handled above in production section
 
 # ------------------------------------------------------
 # Media and File Upload Configuration

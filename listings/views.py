@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django_filters.rest_framework import DjangoFilterBackend
+# from django_filters.rest_framework import DjangoFilterBackend  # Disabled for deployment
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.core.mail import send_mail
@@ -233,8 +233,7 @@ class PropertySearchView(generics.ListAPIView):
     serializer_class = PropertyListSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
     pagination_class = StandardResultsSetPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['property_type', 'listing_type', 'city', 'sub_city', 'bedrooms', 'bathrooms', 'status']
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'description', 'address', 'city', 'sub_city', 'kebele', 'street_name']
     ordering_fields = ['price', 'created_at', 'bedrooms', 'area_sqm']
     ordering = ['-created_at']
@@ -333,8 +332,7 @@ class NeighborhoodViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Neighborhood.objects.all()
     serializer_class = NeighborhoodSerializer
     pagination_class = StandardResultsSetPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['city']
+    filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'city']
 
 @api_view(['GET'])
