@@ -582,7 +582,7 @@ def custom_login(request):
                     failed_login_attempts=0
                 )
             
-            # Check if email is verified (optional security check)
+            # Check if email is verified (required for production)
             if not profile.email_verified:
                 return Response({
                     'error': 'Please verify your email before logging in',
@@ -691,14 +691,20 @@ def request_password_reset(request):
             user = User.objects.get(email=email)
             if user.is_active:
                 # Send REAL password reset email
-                from .utils import send_password_reset_email
-                if send_password_reset_email(user, request):
+                try:
+                    from .utils import send_password_reset_email
+                                        if send_password_reset_email(user, request):
+                        return Response({
+                            'message': 'Password reset link has been sent to your email address.'
+                        })
+                    else:
+                        return Response({
+                            'error': 'Failed to send password reset email. Please try again.'
+                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                except Exception as e:
+                    print(f"🔐 Password reset email failed: {e}")
                     return Response({
-                        'message': 'Password reset link has been sent to your email address.'
-                    })
-                else:
-                    return Response({
-                        'error': 'Failed to send password reset email. Please try again.'
+                        'error': 'Password reset email failed. Please try again.'
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except User.DoesNotExist:
             # Don't reveal if user exists or not
@@ -1041,8 +1047,12 @@ def custom_register(request):
         )
         
         # Send REAL verification email
-        from .utils import send_verification_email
-        email_sent = send_verification_email(user, request)
+        try:
+            from .utils import send_verification_email
+            email_sent = send_verification_email(user, request)
+        except Exception as e:
+            print(f"🔐 Email verification failed: {e}")
+            email_sent = False
         
         # Create token
         token, created = Token.objects.get_or_create(user=user)
