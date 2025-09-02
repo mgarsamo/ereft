@@ -343,18 +343,50 @@ def api_root(request):
     return Response({
         'message': 'Ereft Real Estate API',
         'endpoints': {
-            'properties': '/api/properties/',
-            'search': '/api/properties/search/',
-            'favorites': '/api/favorites/',
-            'neighborhoods': '/api/neighborhoods/',
-            'profile': '/api/profile/',
+            'properties': '/api/listings/properties/',
+            'search': '/api/listings/properties/search/',
+            'favorites': '/api/listings/favorites/',
+            'neighborhoods': '/api/listings/neighborhoods/',
+            'profile': '/api/listings/profile/',
             'auth': {
-                'login': '/api/auth/login/',
-                'register': '/api/auth/register/',
-                'logout': '/api/auth/logout/',
+                'login': '/api/listings/auth/login/',
+                'register': '/api/listings/auth/register/',
+                'logout': '/api/listings/auth/logout/',
             }
         }
     })
+
+@api_view(['GET'])
+def database_test(request):
+    """
+    Test database connection and basic queries
+    """
+    try:
+        from django.db import connection
+        from .models import Property, User
+        
+        # Test basic database connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            db_test = cursor.fetchone()
+        
+        # Test model queries
+        property_count = Property.objects.count()
+        user_count = User.objects.count()
+        
+        return Response({
+            'status': 'success',
+            'database_connection': 'working',
+            'property_count': property_count,
+            'user_count': user_count,
+            'message': 'Database is working correctly'
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'error': str(e),
+            'message': 'Database connection failed'
+        }, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

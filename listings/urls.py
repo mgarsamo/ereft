@@ -28,6 +28,9 @@ urlpatterns = [
     # API Root
     path('', views.api_root, name='api_root'),
     
+    # Database Test
+    path('db-test/', views.database_test, name='database_test'),
+    
     # Custom Property URLs - Use different names to avoid router conflicts
     path('track/<uuid:property_id>/', views.track_property_view, name='track-property-view'),
     
