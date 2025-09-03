@@ -31,6 +31,9 @@ urlpatterns = [
     # Database Test
     path('db-test/', views.database_test, name='database_test'),
     
+    # Admin Setup (Production)
+    path('setup-admin/', views.setup_admin_users, name='setup_admin_users'),
+    
     # Custom Property URLs - Use different names to avoid router conflicts
     path('track/<uuid:property_id>/', views.track_property_view, name='track-property-view'),
     

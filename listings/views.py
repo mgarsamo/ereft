@@ -390,6 +390,36 @@ def database_test(request):
             'message': 'Database connection failed'
         }, status=500)
 
+
+@api_view(['POST'])
+@permission_classes([])
+def setup_admin_users(request):
+    """Setup admin and demo users - Production ready"""
+    try:
+        from django.core.management import call_command
+        from io import StringIO
+        
+        # Capture command output
+        out = StringIO()
+        call_command('create_admin_user', stdout=out)
+        output = out.getvalue()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Admin and demo users created successfully',
+            'output': output,
+            'credentials': {
+                'admin': 'admin / admin123 (superuser)',
+                'test_user': 'test_user / testpass123 (regular user)'
+            }
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Failed to create admin users: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def user_profile(request):
