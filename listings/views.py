@@ -664,23 +664,19 @@ def custom_login(request):
                     failed_login_attempts=0
                 )
             
-            # Check if email is verified (required for production)
-            # Exception: Allow admin user to login even without email verification
-            if not profile.email_verified and user.username != 'admin':
-                return Response({
-                    'error': 'Please verify your email before logging in',
-                    'requires_verification': True
-                }, status=status.HTTP_401_UNAUTHORIZED)
-            
-            # Auto-verify admin user on first login
-            if user.username == 'admin' and not profile.email_verified:
+            # MVP: Skip email verification for now - just allow login
+            # Auto-verify all users for MVP simplicity
+            if not profile.email_verified:
                 profile.email_verified = True
-                profile.is_agent = True
                 profile.save()
-                # Also make sure admin has superuser privileges
+            
+            # Auto-promote admin user
+            if user.username == 'admin':
+                profile.is_agent = True
                 user.is_staff = True
                 user.is_superuser = True
                 user.save()
+                profile.save()
             
             # Reset failed login attempts on successful login
             profile.failed_login_attempts = 0
@@ -1132,48 +1128,28 @@ def custom_register(request):
             last_name=last_name
         )
         
-        # Create UserProfile for the new user (email NOT verified initially)
+        # Create UserProfile for the new user (MVP: auto-verify for simplicity)
         UserProfile.objects.create(
             user=user,
-            email_verified=False,  # Email verification required for production
+            email_verified=True,  # MVP: Skip email verification
             phone_verified=False
         )
-        
-        # Send REAL verification email
-        try:
-            from .utils import send_verification_email
-            email_sent = send_verification_email(user, request)
-        except Exception as e:
-            print(f"🔐 Email verification failed: {e}")
-            email_sent = False
         
         # Create token
         token, created = Token.objects.get_or_create(user=user)
         
-        if email_sent:
-            return Response({
-                'message': 'Registration successful! Please check your email to verify your account.',
-                'token': token.key,
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name,
-                }
-            }, status=status.HTTP_201_CREATED)
-        else:
-            return Response({
-                'message': 'Registration successful! However, verification email could not be sent. Please contact support.',
-                'token': token.key,
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name,
-                }
-            }, status=status.HTTP_201_CREATED)
+        # MVP: Simple successful registration response
+        return Response({
+            'message': 'Registration successful! You can now login.',
+            'token': token.key,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            }
+        }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         return Response(
