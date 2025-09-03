@@ -665,11 +665,22 @@ def custom_login(request):
                 )
             
             # Check if email is verified (required for production)
-            if not profile.email_verified:
+            # Exception: Allow admin user to login even without email verification
+            if not profile.email_verified and user.username != 'admin':
                 return Response({
                     'error': 'Please verify your email before logging in',
                     'requires_verification': True
                 }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Auto-verify admin user on first login
+            if user.username == 'admin' and not profile.email_verified:
+                profile.email_verified = True
+                profile.is_agent = True
+                profile.save()
+                # Also make sure admin has superuser privileges
+                user.is_staff = True
+                user.is_superuser = True
+                user.save()
             
             # Reset failed login attempts on successful login
             profile.failed_login_attempts = 0
