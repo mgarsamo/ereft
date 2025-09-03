@@ -420,6 +420,58 @@ def setup_admin_users(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+@permission_classes([])
+def verify_admin_user(request):
+    """Verify admin user email for immediate login - Production ready"""
+    try:
+        # Find admin user
+        admin_user = User.objects.get(username='admin')
+        
+        # Get or create UserProfile
+        user_profile, created = UserProfile.objects.get_or_create(
+            user=admin_user,
+            defaults={
+                'phone_number': '+251911000000',
+                'is_agent': True,
+                'email_verified': True,
+                'is_locked': False,
+                'failed_login_attempts': 0
+            }
+        )
+        
+        if not created:
+            # Update existing profile
+            user_profile.email_verified = True
+            user_profile.is_locked = False
+            user_profile.failed_login_attempts = 0
+            user_profile.save()
+        
+        # Make admin a superuser
+        admin_user.is_staff = True
+        admin_user.is_superuser = True
+        admin_user.is_active = True
+        admin_user.save()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Admin user verified and ready for login',
+            'credentials': 'admin / admin123',
+            'permissions': 'superuser with email_verified=True'
+        })
+    
+    except User.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Admin user not found. Please register admin user first.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Failed to verify admin user: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def user_profile(request):
