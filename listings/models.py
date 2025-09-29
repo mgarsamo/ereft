@@ -74,7 +74,7 @@ class Property(models.Model):
     # Basic Info
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
-    description = models.TextField()
+    description = models.TextField(blank=True, null=True)
     property_type = models.CharField(max_length=20, choices=PROPERTY_TYPES)
     listing_type = models.CharField(max_length=20, choices=LISTING_TYPES)
     price = models.DecimalField(max_digits=15, decimal_places=2)
