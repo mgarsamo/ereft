@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from listings.views import google_oauth_endpoint
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -25,7 +26,7 @@ urlpatterns = [
     path('api/payments/', include('payments.urls')),
     
     # OAuth redirect endpoint (for Google OAuth)
-    path('oauth/', google_oauth_endpoint),
+    path('oauth/', include('listings.urls')),
     
     # Djoser JWT Authentication endpoints
     path('api/auth/', include('djoser.urls')),
