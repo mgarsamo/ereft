@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ereft - Find Your Perfect Home in Ethiopia</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .hero {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+            text-align: center;
+            padding: 80px 20px;
+        }
+        .hero h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        .hero p {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .app-store-badge {
+            display: inline-block;
+            margin: 10px;
+        }
+        .app-store-badge img {
+            height: 60px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        .section {
+            padding: 80px 0;
+        }
+        .features {
+            background: #f8f9fa;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            margin-top: 50px;
+        }
+        .feature-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+        .feature-icon {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        .feature-card h3 {
+            color: #2196F3;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+        .stats {
+            background: #000;
+            color: white;
+            text-align: center;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 40px;
+            margin-top: 50px;
+        }
+        .stat-item h3 {
+            font-size: 2.5em;
+            color: #2196F3;
+            margin-bottom: 10px;
+        }
+        .cta {
+            background: #2196F3;
+            color: white;
+            text-align: center;
+        }
+        .cta h2 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            background: white;
+            color: #2196F3;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+        }
+        .footer {
+            background: #333;
+            color: white;
+            text-align: center;
+            padding: 40px 0;
+        }
+        h2 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .features h2 {
+            color: #2196F3;
+        }
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2em;
+            }
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>🏠 Ereft</h1>
+            <p>Find your perfect home in Ethiopia. Browse houses, apartments, and land across Ethiopian cities with advanced search, maps, and local address system.</p>
+            
+            <div style="margin-top: 40px;">
+                <a href="#" class="app-store-badge">
+                    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on App Store">
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="section features">
+        <div class="container">
+            <h2>Why Choose Ereft?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🏡</div>
+                    <h3>Comprehensive Listings</h3>
+                    <p>Browse thousands of properties including houses, apartments, condos, townhouses, land, and commercial properties across Ethiopia.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🗺️</div>
+                    <h3>Interactive Maps</h3>
+                    <p>Explore properties on interactive maps with GPS-enabled discovery. View neighborhoods and get detailed location information.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📍</div>
+                    <h3>Ethiopian Address System</h3>
+                    <p>Search using familiar Ethiopian addresses - Sub-city, Kebele, and street names you know and understand.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💰</div>
+                    <h3>Advanced Filtering</h3>
+                    <p>Filter properties by price, bedrooms, bathrooms, property type, area size, and location to find exactly what you need.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>User-Friendly Design</h3>
+                    <p>Clean, intuitive interface designed specifically for Ethiopian users with fast browsing and easy navigation.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <h3>Secure & Reliable</h3>
+                    <p>Verified property listings, secure user accounts, and direct contact with property owners in a trusted environment.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="section stats">
+        <div class="container">
+            <h2 style="color: white;">Trusted by Thousands</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h3>1000+</h3>
+                    <p>Properties Listed</p>
+                </div>
+                <div class="stat-item">
+                    <h3>50+</h3>
+                    <p>Ethiopian Cities</p>
+                </div>
+                <div class="stat-item">
+                    <h3>24/7</h3>
+                    <p>App Availability</p>
+                </div>
+                <div class="stat-item">
+                    <h3>100%</h3>
+                    <p>Free to Use</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="section cta">
+        <div class="container">
+            <h2>Ready to Find Your Dream Home?</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">Join thousands of Ethiopians who trust Ereft for their real estate needs.</p>
+            <a href="#" class="btn">Download Now</a>
+            <a href="mailto:mgarsamo@icloud.com" class="btn">Contact Support</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Melaku Garsamo. All rights reserved.</p>
+            <p>🇪🇹 Made with ❤️ for Ethiopia</p>
+            <p style="margin-top: 20px;">
+                <a href="mailto:mgarsamo@icloud.com" style="color: #2196F3;">Support</a> | 
+                <a href="#" style="color: #2196F3;">Privacy Policy</a>
+            </p>
+        </div>
+    </footer>
+</body>
+</html>

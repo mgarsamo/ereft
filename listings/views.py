@@ -882,8 +882,8 @@ def process_google_oauth_code(code, request):
         # Exchange authorization code for access token
         token_url = 'https://oauth2.googleapis.com/token'
         
-        # Use the web redirect URI for Google OAuth
-        redirect_uri = 'https://ereft.onrender.com/oauth'
+        # Use the correct OAuth endpoint for Google OAuth
+        redirect_uri = 'https://ereft.onrender.com/api/listings/oauth/'
         
         token_data = {
             'client_id': GOOGLE_CLIENT_ID,
@@ -1739,9 +1739,9 @@ def oauth_callback(request):
         # Exchange authorization code for access token
         token_url = 'https://oauth2.googleapis.com/token'
         
-        # Use the provided redirect URI or default to the web one
+        # Use the provided redirect URI or default to the correct OAuth endpoint
         if not redirect_uri:
-            redirect_uri = 'https://ereft.onrender.com/oauth'
+            redirect_uri = 'https://ereft.onrender.com/api/listings/oauth/'
         
         token_data = {
             'client_id': GOOGLE_CLIENT_ID,

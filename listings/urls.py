@@ -67,6 +67,9 @@ urlpatterns = [
     # OAuth redirect endpoint (for Google OAuth redirect)
     path('oauth/', views.google_oauth_endpoint, name='oauth_redirect'),
     
+    # OAuth callback endpoint (for exchanging code for JWT)
+    path('oauth/callback/', views.oauth_callback, name='oauth_callback'),
+    
     # Enhanced Authentication with JWT, Email & SMS Verification
     path('auth/enhanced-login/', views.enhanced_login, name='enhanced_login'),
     path('auth/enhanced-register/', views.enhanced_register, name='enhanced_register'),

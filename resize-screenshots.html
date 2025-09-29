@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ereft Screenshot Resizer for App Store</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 3px dashed #2196F3;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            background: #f8f9fa;
+        }
+        .upload-area:hover {
+            background: #e3f2fd;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background: #2196F3;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        .btn:hover {
+            background: #1976D2;
+        }
+        .size-option {
+            background: #f0f8ff;
+            border: 2px solid #2196F3;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        .size-option:hover {
+            background: #e3f2fd;
+        }
+        .size-option.selected {
+            background: #2196F3;
+            color: white;
+        }
+        .preview {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .preview canvas {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Ereft Screenshot Resizer</h1>
+        <p>Resize your iPhone screenshots to meet App Store requirements</p>
+        
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <h3>📸 Upload Your Screenshot</h3>
+            <p>Click here or drag and drop your screenshot</p>
+            <input type="file" id="fileInput" accept="image/*" onchange="loadImage(event)">
+        </div>
+        
+        <div id="sizeOptions" style="display: none;">
+            <h3>📐 Choose Target Size:</h3>
+            
+            <div class="size-option" onclick="selectSize(1320, 2868, 'iPhone 6.9&quot; (iPhone 16 Pro Max)')">
+                <strong>iPhone 6.9" Display</strong><br>
+                1320 × 2868px (iPhone 16 Pro Max)
+            </div>
+            
+            <div class="size-option" onclick="selectSize(1290, 2796, 'iPhone 6.7&quot; (iPhone 15 Pro Max)')">
+                <strong>iPhone 6.7" Display</strong><br>
+                1290 × 2796px (iPhone 15 Pro Max, 14 Pro Max)
+            </div>
+            
+            <div class="size-option" onclick="selectSize(1242, 2688, 'iPhone 6.5&quot; (iPhone XS Max)')">
+                <strong>iPhone 6.5" Display</strong><br>
+                1242 × 2688px (iPhone XS Max, 11 Pro Max)
+            </div>
+            
+            <div class="size-option" onclick="selectSize(2048, 2732, 'iPad 12.9&quot; (iPad Pro)')">
+                <strong>iPad 12.9" Display</strong><br>
+                2048 × 2732px (iPad Pro 12.9")
+            </div>
+            
+            <div class="size-option" onclick="selectSize(1668, 2388, 'iPad 11&quot; (iPad Pro)')">
+                <strong>iPad 11" Display</strong><br>
+                1668 × 2388px (iPad Pro 11")
+            </div>
+        </div>
+        
+        <div id="previewArea" style="display: none;">
+            <h3>🖼️ Preview:</h3>
+            <div class="preview">
+                <canvas id="previewCanvas"></canvas>
+            </div>
+            <button class="btn" onclick="downloadResized()">📥 Download Resized Screenshot</button>
+        </div>
+    </div>
+
+    <script>
+        let originalImage = null;
+        let selectedWidth = 1320;
+        let selectedHeight = 2868;
+        let selectedDevice = 'iPhone 6.9"';
+
+        function loadImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    originalImage = img;
+                    document.getElementById('sizeOptions').style.display = 'block';
+                    
+                    // Auto-select best size based on original image
+                    if (img.width > img.height) {
+                        // Landscape - probably iPad
+                        selectSize(2732, 2048, 'iPad 12.9" Landscape');
+                    } else {
+                        // Portrait - probably iPhone
+                        selectSize(1320, 2868, 'iPhone 6.9"');
+                    }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function selectSize(width, height, device) {
+            selectedWidth = width;
+            selectedHeight = height;
+            selectedDevice = device;
+            
+            // Update UI
+            document.querySelectorAll('.size-option').forEach(el => el.classList.remove('selected'));
+            event.target.classList.add('selected');
+            
+            if (originalImage) {
+                resizeImage();
+            }
+        }
+
+        function resizeImage() {
+            const canvas = document.getElementById('previewCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = selectedWidth;
+            canvas.height = selectedHeight;
+            
+            // Fill with white background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, selectedWidth, selectedHeight);
+            
+            // Calculate scaling to fit image while maintaining aspect ratio
+            const scaleX = selectedWidth / originalImage.width;
+            const scaleY = selectedHeight / originalImage.height;
+            const scale = Math.min(scaleX, scaleY);
+            
+            const newWidth = originalImage.width * scale;
+            const newHeight = originalImage.height * scale;
+            
+            // Center the image
+            const x = (selectedWidth - newWidth) / 2;
+            const y = (selectedHeight - newHeight) / 2;
+            
+            ctx.drawImage(originalImage, x, y, newWidth, newHeight);
+            
+            document.getElementById('previewArea').style.display = 'block';
+        }
+
+        function downloadResized() {
+            const canvas = document.getElementById('previewCanvas');
+            const link = document.createElement('a');
+            link.download = `ereft-screenshot-${selectedWidth}x${selectedHeight}-${selectedDevice.replace(/[^a-zA-Z0-9]/g, '')}.png`;
+            link.href = canvas.toDataURL('image/png', 1.0);
+            link.click();
+            
+            alert(`✅ Downloaded ${selectedWidth}×${selectedHeight}px screenshot for ${selectedDevice}!`);
+        }
+    </script>
+    
+    <div style="margin-top: 40px; padding: 20px; background: #e3f2fd; border-radius: 8px;">
+        <h3>📋 Instructions:</h3>
+        <ol>
+            <li><strong>Upload</strong> each of your current screenshots</li>
+            <li><strong>Select</strong> the target iPhone/iPad size</li>
+            <li><strong>Download</strong> the resized version</li>
+            <li><strong>Upload</strong> to App Store Connect</li>
+        </ol>
+        
+        <h3>📱 Required Screenshots (in order):</h3>
+        <ol>
+            <li><strong>Home Screen</strong> - Main property listings</li>
+            <li><strong>Login Screen</strong> - Authentication page</li>
+            <li><strong>Favorites</strong> - Saved properties</li>
+            <li><strong>Search</strong> - Property search interface</li>
+            <li><strong>App Icon</strong> - Loading screen with icon</li>
+        </ol>
+    </div>
+</body>
+</html>

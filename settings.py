@@ -373,6 +373,13 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'AIzaSyAWis-jNmUwxCikA2FG7QqLi-nz7jEvadY')
 
 # ------------------------------------------------------
+# Google OAuth Configuration
+# ------------------------------------------------------
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+GOOGLE_IOS_CLIENT_ID = os.environ.get('GOOGLE_IOS_CLIENT_ID', '')
+
+# ------------------------------------------------------
 # Firebase Configuration
 # ------------------------------------------------------
 FIREBASE_CONFIG = {
