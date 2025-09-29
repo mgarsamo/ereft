@@ -24,6 +24,9 @@ urlpatterns = [
     path('api/listings/', include('listings.urls')),
     path('api/payments/', include('payments.urls')),
     
+    # OAuth redirect endpoint (for Google OAuth)
+    path('oauth/', include('listings.urls')),
+    
     # Djoser JWT Authentication endpoints
     path('api/auth/', include('djoser.urls')),
     path('api/auth/', include('djoser.urls.jwt')),
