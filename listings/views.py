@@ -25,6 +25,7 @@ from django.template.loader import render_to_string
 from django.utils.crypto import get_random_string
 from django.utils import timezone
 from django.http import HttpResponse
+from django.conf import settings
 from datetime import timedelta
 import json
 import requests
