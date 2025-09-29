@@ -473,22 +473,32 @@ def verify_admin_user(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def user_profile(request):
     """
-    Get current user profile
+    Get or update current user profile
+    Supports profile picture upload (Cloudinary URL)
     """
     user = request.user
     try:
         profile = user.profile
-        serializer = UserProfileSerializer(profile)
-        return Response(serializer.data)
     except UserProfile.DoesNotExist:
         # Create profile if it doesn't exist
         profile = UserProfile.objects.create(user=user)
+    
+    if request.method == 'GET':
         serializer = UserProfileSerializer(profile)
         return Response(serializer.data)
+    
+    elif request.method in ['PUT', 'PATCH']:
+        # Update profile with provided data
+        partial = request.method == 'PATCH'
+        serializer = UserProfileSerializer(profile, data=request.data, partial=partial)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def featured_properties(request):

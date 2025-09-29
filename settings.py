@@ -406,6 +406,12 @@ cloudinary.config(
     secure=True
 )
 
+# Cloudinary environment variables
+CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '935983952526243')
+CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', 'ZbaIe1eVXx0wdL3XYhDjExCfQb8')
+CLOUDINARY_UPLOAD_PRESET = os.environ.get('CLOUDINARY_UPLOAD_PRESET', 'ereft')
+
 # Cloudinary settings
 CLOUDINARY = {
     'cloud_name': os.environ.get('CLOUDINARY_CLOUD_NAME', 'detdm1snc'),
