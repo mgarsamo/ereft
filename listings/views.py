@@ -874,18 +874,22 @@ def process_google_oauth_code(code, request):
     try:
         print(f"🔐 Processing Google OAuth code: {code[:10]}...")
         
-        # Google OAuth configuration
-        GOOGLE_CLIENT_ID = '91486871350-79fvub6490473eofjpu1jjlhncuiua44.apps.googleusercontent.com'
-        GOOGLE_CLIENT_SECRET = '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'
+        # Google OAuth configuration - Use environment variables
+        GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
+        GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
         
         # Exchange authorization code for access token
         token_url = 'https://oauth2.googleapis.com/token'
+        
+        # Use the web redirect URI for Google OAuth
+        redirect_uri = 'https://ereft.onrender.com/oauth'
+        
         token_data = {
             'client_id': GOOGLE_CLIENT_ID,
             'client_secret': GOOGLE_CLIENT_SECRET,
             'code': code,
             'grant_type': 'authorization_code',
-            'redirect_uri': 'https://ereft.onrender.com/oauth'
+            'redirect_uri': redirect_uri
         }
         
         print(f"🔐 Google OAuth: Exchanging code for token...")
@@ -983,17 +987,96 @@ def process_google_oauth_code(code, request):
             # Create deep link with authentication data
             deep_link = f"ereft://oauth?token={token.key}&user_id={user.id}&email={email}&first_name={first_name}&last_name={last_name}&google_id={google_id}"
             
+            print(f"🔐 Google OAuth: Redirecting to deep link: {deep_link}")
+            
+            # Return HTML page that immediately redirects to the mobile app
             return HttpResponse(f"""
+            <!DOCTYPE html>
             <html>
-            <head><title>OAuth Success</title></head>
+            <head>
+                <title>Redirecting to Ereft App...</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        text-align: center;
+                    }}
+                    .container {{
+                        background: rgba(255, 255, 255, 0.1);
+                        padding: 2rem;
+                        border-radius: 20px;
+                        backdrop-filter: blur(10px);
+                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                        max-width: 400px;
+                        width: 90%;
+                    }}
+                    h1 {{
+                        margin: 0 0 1rem 0;
+                        font-size: 1.5rem;
+                    }}
+                    p {{
+                        margin: 0.5rem 0;
+                        opacity: 0.9;
+                    }}
+                    .spinner {{
+                        width: 40px;
+                        height: 40px;
+                        border: 4px solid rgba(255, 255, 255, 0.3);
+                        border-top: 4px solid white;
+                        border-radius: 50%;
+                        animation: spin 1s linear infinite;
+                        margin: 1rem auto;
+                    }}
+                    @keyframes spin {{
+                        0% {{ transform: rotate(0deg); }}
+                        100% {{ transform: rotate(360deg); }}
+                    }}
+                    .button {{
+                        display: inline-block;
+                        margin-top: 1rem;
+                        padding: 12px 24px;
+                        background: rgba(255, 255, 255, 0.2);
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 25px;
+                        border: 2px solid rgba(255, 255, 255, 0.3);
+                        transition: all 0.3s ease;
+                    }}
+                    .button:hover {{
+                        background: rgba(255, 255, 255, 0.3);
+                        transform: translateY(-2px);
+                    }}
+                </style>
+            </head>
             <body>
-                <h2>Authentication Successful!</h2>
-                <p>Welcome, {first_name} {last_name}!</p>
-                <p>Email: {email}</p>
-                <p>Authentication Token: {token.key}</p>
-                <p>User ID: {user.id}</p>
-                <p>Redirecting to app...</p>
+                <div class="container">
+                    <h1>🎉 Welcome to Ereft!</h1>
+                    <p>Hello, {first_name} {last_name}!</p>
+                    <p>You have been successfully authenticated.</p>
+                    <div class="spinner"></div>
+                    <p>Redirecting to the app...</p>
+                    <a href="{deep_link}" class="button">Open Ereft App</a>
+                </div>
+                
                 <script>
+                    // Immediate redirect to the mobile app
+                    window.location.href = "{deep_link}";
+                    
+                    // Fallback: try to open the app after a short delay
+                    setTimeout(() => {{
+                        window.location.href = "{deep_link}";
+                    }}, 1000);
+                    
+                    // Additional fallback for iOS
                     setTimeout(() => {{
                         window.location.href = "{deep_link}";
                     }}, 2000);
@@ -1627,3 +1710,128 @@ def refresh_token(request):
             {'error': 'Token refresh failed. Please try again.'}, 
             status=status.HTTP_401_UNAUTHORIZED
         )
+
+
+@api_view(['POST'])
+def oauth_callback(request):
+    """
+    Handle OAuth callback - exchange authorization code for JWT and redirect to app
+    """
+    try:
+        print(f"🔐 OAuth callback received")
+        
+        # Get the authorization code from request body
+        code = request.data.get('code')
+        redirect_uri = request.data.get('redirect_uri')
+        
+        if not code:
+            return JsonResponse({
+                'error': 'Authorization code is required'
+            }, status=400)
+        
+        print(f"🔐 Processing OAuth code: {code[:10]}...")
+        
+        # Google OAuth configuration
+        GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
+        GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
+        
+        # Exchange authorization code for access token
+        token_url = 'https://oauth2.googleapis.com/token'
+        
+        # Use the provided redirect URI or default to the web one
+        if not redirect_uri:
+            redirect_uri = 'https://ereft.onrender.com/oauth'
+        
+        token_data = {
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': redirect_uri
+        }
+        
+        print(f"🔐 Google OAuth: Exchanging code for token...")
+        token_response = requests.post(token_url, data=token_data)
+        token_response.raise_for_status()
+        token_info = token_response.json()
+        
+        access_token = token_info.get('access_token')
+        if not access_token:
+            return JsonResponse({
+                'error': 'Failed to obtain access token from Google'
+            }, status=400)
+        
+        print(f"🔐 Google OAuth: Access token obtained, fetching user info...")
+        
+        # Get user info from Google
+        user_info_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
+        headers = {'Authorization': f'Bearer {access_token}'}
+        user_response = requests.get(user_info_url, headers=headers)
+        user_response.raise_for_status()
+        user_info = user_response.json()
+        
+        print(f"🔐 Google OAuth: User info received: {user_info.get('email', 'No email')}")
+        
+        # Create or get user
+        email = user_info.get('email')
+        if not email:
+            return JsonResponse({
+                'error': 'No email received from Google'
+            }, status=400)
+        
+        # Try to get existing user by email
+        try:
+            user = User.objects.get(email=email)
+            print(f"🔐 Google OAuth: Existing user found: {user.username}")
+        except User.DoesNotExist:
+            # Create new user
+            username = user_info.get('name', email.split('@')[0])
+            # Ensure username is unique
+            original_username = username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{original_username}{counter}"
+                counter += 1
+            
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                first_name=user_info.get('given_name', ''),
+                last_name=user_info.get('family_name', ''),
+                is_active=True
+            )
+            print(f"🔐 Google OAuth: New user created: {user.username}")
+        
+        # Generate JWT tokens
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+        
+        print(f"🔐 Google OAuth: JWT tokens generated for user: {user.username}")
+        
+        # Return the tokens and user data
+        return JsonResponse({
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'token': access_token,  # Alias for compatibility
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_verified': user.is_active,
+            }
+        })
+        
+    except requests.RequestException as e:
+        print(f"🔐 OAuth callback error (Google API): {str(e)}")
+        return JsonResponse({
+            'error': 'Failed to communicate with Google OAuth service'
+        }, status=500)
+    except Exception as e:
+        print(f"🔐 OAuth callback error: {str(e)}")
+        return JsonResponse({
+            'error': 'OAuth callback processing failed'
+        }, status=500)
