@@ -983,12 +983,58 @@ def process_google_oauth_code(code, request):
         
         print(f"🔐 Google OAuth: Authentication successful for user: {user.username}")
         
-        # For GET requests (redirect from Google), redirect to mobile app with deep link
+        # For GET requests (redirect from Google), detect platform and redirect accordingly
         if request.method == 'GET':
-            # Create deep link with authentication data
+            # Detect if this is a web request (non-mobile)
+            user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+            is_mobile_app = 'expo' in user_agent or 'okhttp' in user_agent or 'react-native' in user_agent
+            
+            # Check if the website redirect URL is in the state (passed from website)
+            state = request.GET.get('state', '')
+            is_web_request = 'website' in state or 'ereft' not in user_agent
+            
+            print(f"🔐 Google OAuth: User-Agent: {user_agent[:100]}")
+            print(f"🔐 Google OAuth: State: {state}")
+            print(f"🔐 Google OAuth: Detected web request: {is_web_request}")
+            
+            if is_web_request:
+                # Redirect to website with token
+                from urllib.parse import urlencode
+                website_url = "https://ereft-website.vercel.app/login"
+                redirect_url = f"{website_url}?{urlencode({'token': token.key, 'success': 'true'})}"
+                
+                print(f"🔐 Google OAuth: Redirecting to website: {redirect_url}")
+                
+                # Return HTML page that redirects to website
+                return HttpResponse(f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Signing in to Ereft...</title>
+                    <meta charset="UTF-8">
+                    <meta http-equiv="refresh" content="0;url={redirect_url}">
+                    <style>
+                        body {{
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 100vh;
+                            margin: 0;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <p style="color: white;">Redirecting...</p>
+                </body>
+                </html>
+                """)
+            
+            # Mobile app redirect (deep link)
             deep_link = f"ereft://oauth?token={token.key}&user_id={user.id}&email={email}&first_name={first_name}&last_name={last_name}&google_id={google_id}"
             
-            print(f"🔐 Google OAuth: Redirecting to deep link: {deep_link}")
+            print(f"🔐 Google OAuth: Redirecting to mobile app: {deep_link}")
             
             # Return HTML page that immediately redirects to the mobile app
             return HttpResponse(f"""
