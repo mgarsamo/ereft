@@ -93,8 +93,8 @@ class Property(models.Model):
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     
     # Property Details (using square meters)
-    bedrooms = models.PositiveIntegerField()
-    bathrooms = models.DecimalField(max_digits=3, decimal_places=1)
+    bedrooms = models.PositiveIntegerField(blank=True, null=True)
+    bathrooms = models.DecimalField(max_digits=3, decimal_places=1, blank=True, null=True)
     area_sqm = models.PositiveIntegerField(blank=True, null=True, help_text='Area in square meters')
     lot_size_sqm = models.PositiveIntegerField(blank=True, null=True, help_text='Lot size in square meters')
     year_built = models.PositiveIntegerField(blank=True, null=True)
