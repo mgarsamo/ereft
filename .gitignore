@@ -11,3 +11,4 @@ media/
 venv/
 *.egg-info/
 .cursorrules
+.env.example

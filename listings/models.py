@@ -13,6 +13,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     profile_picture = models.CharField(max_length=500, blank=True, null=True)  # Cloudinary URL
+    google_id = models.CharField(max_length=100, blank=True, null=True, unique=True)  # Google OAuth ID
     is_agent = models.BooleanField(default=False)
     agent_license = models.CharField(max_length=100, blank=True, null=True)
     company_name = models.CharField(max_length=200, blank=True, null=True)

@@ -975,8 +975,17 @@ def process_google_oauth_code(code, request):
                 user=user,
                 email_verified=True,  # Google OAuth users are pre-verified
                 phone_verified=False,
-                profile_picture=profile_picture
+                profile_picture=profile_picture,
+                google_id=google_id
             )
+            
+            # Send welcome email for new Google OAuth users
+            try:
+                from .utils import send_welcome_email
+                send_welcome_email(user)
+                print(f"🔐 Google OAuth: Welcome email sent to {email}")
+            except Exception as e:
+                print(f"🔐 Google OAuth: Failed to send welcome email: {str(e)}")
         
         # Generate or get existing token
         token, created = Token.objects.get_or_create(user=user)
