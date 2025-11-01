@@ -949,6 +949,24 @@ def process_google_oauth_code(code, request):
             user.last_name = last_name
             user.save()
             
+            # Update or create UserProfile for existing users
+            profile, created = UserProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    'email_verified': True,
+                    'phone_verified': False,
+                    'profile_picture': profile_picture,
+                    'google_id': google_id
+                }
+            )
+            
+            # Update profile if it already exists
+            if not created:
+                profile.email_verified = True
+                profile.profile_picture = profile_picture or profile.profile_picture
+                profile.google_id = google_id or profile.google_id
+                profile.save()
+            
         except User.DoesNotExist:
             # Create new user
             username = f"google_{google_id}" if google_id else f"google_{email.split('@')[0]}"
