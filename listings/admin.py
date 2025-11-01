@@ -44,27 +44,27 @@ class PropertyAdmin(admin.ModelAdmin):
         'property_type', 'listing_type', 'is_featured', 'is_active', 
         'has_garage', 'has_pool', 'has_garden', 'created_at'
     ]
-    search_fields = ['title', 'description', 'address', 'city', 'state']
+    search_fields = ['title', 'description', 'address', 'city', 'sub_city', 'kebele']
     readonly_fields = ['id', 'created_at', 'updated_at', 'views_count']
     list_editable = ['is_featured', 'is_active']
     inlines = [PropertyImageInline]
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('id', 'title', 'description', 'property_type', 'listing_type', 'price')
+            'fields': ('id', 'title', 'description', 'property_type', 'listing_type', 'price', 'price_per_sqm')
         }),
         ('Location', {
-            'fields': ('address', 'city', 'state', 'zip_code', 'country', 'latitude', 'longitude')
+            'fields': ('address', 'city', 'sub_city', 'kebele', 'street_name', 'house_number', 'country', 'latitude', 'longitude')
         }),
         ('Property Details', {
-            'fields': ('bedrooms', 'bathrooms', 'square_feet', 'lot_size', 'year_built')
+            'fields': ('bedrooms', 'bathrooms', 'area_sqm', 'lot_size_sqm', 'year_built')
         }),
         ('Features', {
             'fields': ('has_garage', 'has_pool', 'has_garden', 'has_balcony', 
                       'is_furnished', 'has_air_conditioning', 'has_heating')
         }),
         ('Status', {
-            'fields': ('is_featured', 'is_active', 'views_count')
+            'fields': ('status', 'is_published', 'is_featured', 'is_active', 'views_count')
         }),
         ('Relationships', {
             'fields': ('owner', 'agent')

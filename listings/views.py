@@ -104,63 +104,107 @@ class PropertyViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Ensure new listings are immediately visible and set proper defaults"""
         try:
-            print(f"🔧 PropertyViewSet: Creating property with data: {serializer.validated_data}")
-            print(f"🔧 PropertyViewSet: Request content type: {self.request.content_type}")
-            print(f"🔧 PropertyViewSet: Request data: {self.request.data}")
+            user = self.request.user
+            print(f"🏠 PropertyViewSet: Creating property for user: {user.username} (ID: {user.id})")
+            print(f"🏠 PropertyViewSet: Property data: {serializer.validated_data}")
             
             # Handle file uploads before saving
             images_data = []
             if hasattr(self.request, 'FILES') and 'images' in self.request.FILES:
-                print(f"🔧 PropertyViewSet: Found {len(self.request.FILES.getlist('images'))} images to upload")
+                image_count = len(self.request.FILES.getlist('images'))
+                print(f"🏠 PropertyViewSet: Uploading {image_count} images to Cloudinary")
                 
-                for image_file in self.request.FILES.getlist('images'):
+                for idx, image_file in enumerate(self.request.FILES.getlist('images'), 1):
                     try:
                         from .utils import handle_property_image_upload
-                        # Get temporary property ID for folder organization
                         temp_id = str(serializer.validated_data.get('title', 'temp'))[:20]
                         image_result = handle_property_image_upload(image_file, temp_id)
                         images_data.append(image_result['url'])
-                        print(f"🔧 PropertyViewSet: Image uploaded to Cloudinary: {image_result['url']}")
+                        print(f"✅ PropertyViewSet: Image {idx}/{image_count} uploaded: {image_result['url']}")
                     except Exception as img_error:
-                        print(f"🔧 PropertyViewSet: Error uploading image: {img_error}")
-                        # Continue with other images
+                        print(f"⚠️ PropertyViewSet: Failed to upload image {idx}: {img_error}")
                         continue
                 
-                # Remove images from serializer data to avoid conflicts
                 if 'images' in serializer.validated_data:
                     del serializer.validated_data['images']
             
             # Create property with uploaded images
             property_obj = serializer.save(
-                owner=self.request.user,
+                owner=user,
                 status='active',
                 is_published=True,
                 is_active=True
             )
             
-            # Now create PropertyImage objects with the Cloudinary URLs
+            print(f"✅ PropertyViewSet: Property saved - ID: {property_obj.id}, Title: {property_obj.title}")
+            
+            # Create PropertyImage objects with the Cloudinary URLs
             if images_data:
-                for i, image_url in enumerate(images_data):
+                for i, image_url in enumerate(images_data, 1):
                     try:
                         PropertyImage.objects.create(
                             property=property_obj,
                             image=image_url,
-                            is_primary=(i == 0),
+                            is_primary=(i == 1),
                             order=i
                         )
-                        print(f"🔧 PropertyViewSet: Created PropertyImage {i+1}")
+                        print(f"✅ PropertyViewSet: PropertyImage {i}/{len(images_data)} created")
                     except Exception as img_error:
-                        print(f"🔧 PropertyViewSet: Error creating PropertyImage: {img_error}")
+                        print(f"⚠️ PropertyViewSet: Failed to create PropertyImage {i}: {img_error}")
                         continue
             
-            print(f"🔧 PropertyViewSet: Property created successfully: {property_obj.id}")
+            # Log successful creation with full metadata
+            print(f"🎉 PropertyViewSet: Property created successfully!")
+            print(f"   Property ID: {property_obj.id}")
+            print(f"   Title: {property_obj.title}")
+            print(f"   Owner: {user.username} (ID: {user.id}, Email: {user.email})")
+            print(f"   Location: {property_obj.city}, {property_obj.country}")
+            print(f"   Price: ETB {property_obj.price:,.2f}")
+            print(f"   Images: {len(images_data)} uploaded")
+            
             return property_obj
             
         except Exception as e:
-            print(f"🔧 PropertyViewSet: Error in perform_create: {e}")
-            print(f"🔧 PropertyViewSet: Error type: {type(e)}")
+            print(f"❌ PropertyViewSet: CRITICAL ERROR in perform_create")
+            print(f"   User: {self.request.user.username}")
+            print(f"   Error: {str(e)}")
+            print(f"   Error Type: {type(e).__name__}")
             import traceback
             traceback.print_exc()
+            raise e
+    
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to add logging and ensure proper deletion"""
+        instance = self.get_object()
+        user = request.user
+        
+        # Log deletion attempt
+        print(f"🗑️ PropertyViewSet: DELETE request initiated")
+        print(f"   Property ID: {instance.id}")
+        print(f"   Title: {instance.title}")
+        print(f"   Deleted by: {user.username} (ID: {user.id})")
+        print(f"   Is Owner: {instance.owner.id == user.id}")
+        
+        try:
+            property_id = instance.id
+            property_title = instance.title
+            owner_username = instance.owner.username
+            
+            # Delete the property (images will cascade)
+            response = super().destroy(request, *args, **kwargs)
+            
+            print(f"✅ PropertyViewSet: Property deleted successfully")
+            print(f"   Deleted Property ID: {property_id}")
+            print(f"   Deleted Title: {property_title}")
+            print(f"   Owner: {owner_username}")
+            
+            return response
+            
+        except Exception as e:
+            print(f"❌ PropertyViewSet: CRITICAL ERROR in destroy")
+            print(f"   Property ID: {instance.id}")
+            print(f"   User: {user.username}")
+            print(f"   Error: {str(e)}")
             raise e
 
     @action(detail=True, methods=['post'])

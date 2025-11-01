@@ -130,6 +130,38 @@ class Property(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.city}"
+    
+    def save(self, *args, **kwargs):
+        """Override save to add logging and validation"""
+        if self.pk:
+            print(f"📝 Property UPDATE: {self.title} (ID: {self.id})")
+        else:
+            print(f"✨ Property CREATE: {self.title}")
+        super().save(*args, **kwargs)
+    
+    def get_full_address(self):
+        """Get formatted full address"""
+        parts = [self.address]
+        if self.sub_city:
+            parts.append(self.sub_city)
+        parts.append(self.city)
+        if self.kebele:
+            parts.append(f"Kebele {self.kebele}")
+        parts.append(self.country)
+        return ", ".join(parts)
+    
+    def get_owner_info(self):
+        """Get formatted owner information"""
+        return {
+            'username': self.owner.username,
+            'email': self.owner.email,
+            'name': f"{self.owner.first_name or ''} {self.owner.last_name or ''}".strip() or self.owner.username
+        }
+    
+    def update_views(self):
+        """Increment view count"""
+        self.views_count += 1
+        self.save(update_fields=['views_count'])
 
 class PropertyImage(models.Model):
     """
