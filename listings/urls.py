@@ -64,9 +64,6 @@ urlpatterns = [
     path('auth/jwt/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/jwt/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     
-    # OAuth redirect endpoint (for Google OAuth redirect)
-    path('oauth/', views.google_oauth_endpoint, name='oauth_redirect'),
-    
     # OAuth callback endpoint (for exchanging code for JWT)
     path('oauth/callback/', views.oauth_callback, name='oauth_callback'),
     
