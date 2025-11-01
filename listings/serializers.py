@@ -9,9 +9,28 @@ from .models import (
 
 class UserSerializer(serializers.ModelSerializer):
     """Basic user serializer"""
+    phone_number = serializers.SerializerMethodField()
+    profile_picture = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'phone_number', 'profile_picture']
+    
+    def get_phone_number(self, obj):
+        """Get phone number from UserProfile if it exists"""
+        try:
+            profile = obj.profile
+            return profile.phone_number
+        except UserProfile.DoesNotExist:
+            return None
+    
+    def get_profile_picture(self, obj):
+        """Get profile picture from UserProfile if it exists"""
+        try:
+            profile = obj.profile
+            return profile.profile_picture
+        except UserProfile.DoesNotExist:
+            return None
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """User profile serializer"""

@@ -50,7 +50,6 @@ class PropertyViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Property model with full CRUD operations - Simplified for debugging
     """
-    queryset = Property.objects.all()  # Simplified queryset for debugging
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'description']  # Simplified search fields
@@ -65,6 +64,11 @@ class PropertyViewSet(viewsets.ModelViewSet):
             return PropertyDetailSerializer
         else:
             return PropertyListSerializer
+    
+    def get_queryset(self):
+        # Prefetch related data for better performance
+        queryset = Property.objects.select_related('owner', 'agent').prefetch_related('images', 'reviews')
+        return queryset
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
