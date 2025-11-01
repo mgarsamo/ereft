@@ -370,14 +370,14 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 # ------------------------------------------------------
 # Google Maps Configuration
 # ------------------------------------------------------
-GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'AIzaSyAWis-jNmUwxCikA2FG7QqLi-nz7jEvadY')
+GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='AIzaSyAWis-jNmUwxCikA2FG7QqLi-nz7jEvadY')
 
 # ------------------------------------------------------
 # Google OAuth Configuration
 # ------------------------------------------------------
-GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
-GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
-GOOGLE_IOS_CLIENT_ID = os.environ.get('GOOGLE_IOS_CLIENT_ID', '')
+GOOGLE_CLIENT_ID = config('GOOGLE_CLIENT_ID', default='91486871350-79fvub6490473eofjpu1jjlhncuiua44.apps.googleusercontent.com')
+GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='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')
+GOOGLE_IOS_CLIENT_ID = config('GOOGLE_IOS_CLIENT_ID', default='91486871350-ic7gbroh747pe9u31gqe1jjlhncuiua44.apps.googleusercontent.com')
 
 # ------------------------------------------------------
 # Firebase Configuration
