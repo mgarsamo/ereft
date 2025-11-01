@@ -1029,7 +1029,7 @@ def process_google_oauth_code(code, request):
                 from urllib.parse import urlencode
                 
                 # Extract website URL from state parameter
-                website_url = "https://ereft-website.vercel.app/login"  # Default fallback
+                website_url = "https://ereft.com/login"  # Default fallback
                 if state.startswith('website_'):
                     try:
                         origin = state.replace('website_', '')
