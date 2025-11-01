@@ -134,10 +134,11 @@ class Property(models.Model):
     def save(self, *args, **kwargs):
         """Override save to add logging and validation"""
         if self.pk:
-            print(f"📝 Property UPDATE: {self.title} (ID: {self.id})")
+            print(f"📝 Property UPDATE: {self.title} (ID: {self.pk})")
         else:
             print(f"✨ Property CREATE: {self.title}")
         super().save(*args, **kwargs)
+        print(f"✅ Property saved: {self.title} (ID: {self.pk})")
     
     def get_full_address(self):
         """Get formatted full address"""
