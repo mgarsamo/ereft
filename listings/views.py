@@ -78,6 +78,29 @@ class PropertyViewSet(viewsets.ModelViewSet):
             print(f"🔧 PropertyViewSet: Request content type: {self.request.content_type}")
             print(f"🔧 PropertyViewSet: Request data: {self.request.data}")
             
+            # Handle file uploads before saving
+            images_data = []
+            if hasattr(self.request, 'FILES') and 'images' in self.request.FILES:
+                print(f"🔧 PropertyViewSet: Found {len(self.request.FILES.getlist('images'))} images to upload")
+                
+                for image_file in self.request.FILES.getlist('images'):
+                    try:
+                        from .utils import handle_property_image_upload
+                        # Get temporary property ID for folder organization
+                        temp_id = str(serializer.validated_data.get('title', 'temp'))[:20]
+                        image_result = handle_property_image_upload(image_file, temp_id)
+                        images_data.append(image_result['url'])
+                        print(f"🔧 PropertyViewSet: Image uploaded to Cloudinary: {image_result['url']}")
+                    except Exception as img_error:
+                        print(f"🔧 PropertyViewSet: Error uploading image: {img_error}")
+                        # Continue with other images
+                        continue
+                
+                # Remove images from serializer data to avoid conflicts
+                if 'images' in serializer.validated_data:
+                    del serializer.validated_data['images']
+            
+            # Create property with uploaded images
             property_obj = serializer.save(
                 owner=self.request.user,
                 status='active',
@@ -85,12 +108,29 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 is_active=True
             )
             
+            # Now create PropertyImage objects with the Cloudinary URLs
+            if images_data:
+                for i, image_url in enumerate(images_data):
+                    try:
+                        PropertyImage.objects.create(
+                            property=property_obj,
+                            image=image_url,
+                            is_primary=(i == 0),
+                            order=i
+                        )
+                        print(f"🔧 PropertyViewSet: Created PropertyImage {i+1}")
+                    except Exception as img_error:
+                        print(f"🔧 PropertyViewSet: Error creating PropertyImage: {img_error}")
+                        continue
+            
             print(f"🔧 PropertyViewSet: Property created successfully: {property_obj.id}")
             return property_obj
             
         except Exception as e:
             print(f"🔧 PropertyViewSet: Error in perform_create: {e}")
             print(f"🔧 PropertyViewSet: Error type: {type(e)}")
+            import traceback
+            traceback.print_exc()
             raise e
 
     @action(detail=True, methods=['post'])
