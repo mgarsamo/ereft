@@ -52,8 +52,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
     """
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['title', 'description']  # Simplified search fields
-    ordering_fields = ['created_at']  # Simplified ordering
+    search_fields = ['title', 'description', 'address', 'city', 'sub_city']
+    ordering_fields = ['price', 'created_at', 'bedrooms', 'area_sqm']
     ordering = ['-created_at']
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
@@ -68,6 +68,32 @@ class PropertyViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Prefetch related data for better performance
         queryset = Property.objects.select_related('owner', 'agent').prefetch_related('images', 'reviews')
+        
+        # Apply filters
+        listing_type = self.request.query_params.get('listing_type', '')
+        if listing_type:
+            queryset = queryset.filter(listing_type=listing_type)
+        
+        property_type = self.request.query_params.get('property_type', '')
+        if property_type:
+            queryset = queryset.filter(property_type=property_type)
+        
+        min_price = self.request.query_params.get('min_price', '')
+        if min_price:
+            queryset = queryset.filter(price__gte=min_price)
+        
+        max_price = self.request.query_params.get('max_price', '')
+        if max_price:
+            queryset = queryset.filter(price__lte=max_price)
+        
+        bedrooms = self.request.query_params.get('bedrooms', '')
+        if bedrooms:
+            queryset = queryset.filter(bedrooms__gte=bedrooms)
+        
+        city = self.request.query_params.get('city', '')
+        if city:
+            queryset = queryset.filter(city__icontains=city)
+        
         return queryset
 
     def get_permissions(self):
