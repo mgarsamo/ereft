@@ -1555,9 +1555,9 @@ def send_sms_verification(request):
         try:
             from twilio.rest import Client
             
-            account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
-            auth_token = os.environ.get('TWILIO_AUTH_TOKEN')
-            twilio_phone = os.environ.get('TWILIO_PHONE_NUMBER')
+            account_sid = settings.TWILIO_ACCOUNT_SID
+            auth_token = settings.TWILIO_AUTH_TOKEN
+            twilio_phone = settings.TWILIO_PHONE_NUMBER
             
             if not all([account_sid, auth_token, twilio_phone]):
                 return Response(
