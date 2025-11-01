@@ -1000,10 +1000,21 @@ def process_google_oauth_code(code, request):
             if is_web_request:
                 # Redirect to website with token
                 from urllib.parse import urlencode
-                website_url = "https://ereft-website.vercel.app/login"
+                
+                # Extract website URL from state parameter
+                website_url = "https://ereft-website.vercel.app/login"  # Default fallback
+                if state.startswith('website_'):
+                    try:
+                        origin = state.replace('website_', '')
+                        website_url = f"{origin}/login"
+                    except:
+                        pass
+                
                 redirect_url = f"{website_url}?{urlencode({'token': token.key, 'success': 'true'})}"
                 
-                print(f"🔐 Google OAuth: Redirecting to website: {redirect_url}")
+                print(f"🔐 Google OAuth: State: {state}")
+                print(f"🔐 Google OAuth: Website URL: {website_url}")
+                print(f"🔐 Google OAuth: Redirecting to: {redirect_url}")
                 
                 # Return HTML page that redirects to website
                 return HttpResponse(f"""
