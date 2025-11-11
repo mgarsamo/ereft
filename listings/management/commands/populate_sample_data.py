@@ -1,8 +1,9 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from listings.models import Property, PropertyImage, Neighborhood
+from listings.models import Property, PropertyImage, Neighborhood, UserProfile
 from decimal import Decimal
-import uuid
+from django.core.cache import cache
+from django.utils import timezone
 
 class Command(BaseCommand):
     help = 'Populate database with sample property data for testing'
@@ -10,24 +11,36 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write('🏠 Starting to populate sample property data...')
         
-        # Create a test user if it doesn't exist
-        test_user, created = User.objects.get_or_create(
-            username='test_user',
+        # Create or update the production listing agent profile
+        agent_user, created = User.objects.get_or_create(
+            username='melaku_agent',
             defaults={
-                'email': 'test@ereft.com',
-                'first_name': 'Test',
-                'last_name': 'User',
-                'is_active': True
-            }
+                'email': 'melaku.garsamo@gmail.com',
+                'first_name': 'Melaku',
+                'last_name': 'Garsamo',
+                'is_active': True,
+            },
         )
-        
+
         if created:
-            test_user.set_password('testpass123')
-            test_user.save()
-            self.stdout.write('✅ Created test user: test_user')
-        else:
-            self.stdout.write('✅ Test user already exists')
-        
+            agent_user.set_password('ereftstrongpassword')
+
+        # Ensure agent details stay up to date
+        agent_user.email = 'melaku.garsamo@gmail.com'
+        agent_user.first_name = 'Melaku'
+        agent_user.last_name = 'Garsamo'
+        agent_user.save()
+
+        agent_profile, _ = UserProfile.objects.get_or_create(user=agent_user)
+        agent_profile.phone_number = '+251 966 913 617'
+        agent_profile.is_agent = True
+        agent_profile.company_name = 'Ereft Realty'
+        agent_profile.email_verified = True
+        agent_profile.phone_verified = True
+        agent_profile.save()
+
+        self.stdout.write('✅ Listing agent profile ready: melaku.garsamo@gmail.com / +251 966 913 617')
+ 
         # Sample properties data
         sample_properties = [
             {
@@ -61,7 +74,22 @@ class Command(BaseCommand):
                 'status': 'active',
                 'is_published': True,
                 'is_active': True,
-                'views_count': 45
+                'views_count': 45,
+                'listed_date': timezone.now(),
+                'images': [
+                    {
+                        'url': 'https://images.unsplash.com/photo-1600585154340-0ef3c08dc63f?w=1200&q=80',
+                        'caption': 'Front elevation with landscaped garden',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=1200&q=80',
+                        'caption': 'Sunlit living room with hardwood floors',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1200&q=80',
+                        'caption': 'Modern kitchen with breakfast nook',
+                    },
+                ],
             },
             {
                 'title': 'Modern Apartment in Kazanchis',
@@ -94,7 +122,22 @@ class Command(BaseCommand):
                 'status': 'active',
                 'is_published': True,
                 'is_active': True,
-                'views_count': 32
+                'views_count': 32,
+                'listed_date': timezone.now(),
+                'images': [
+                    {
+                        'url': 'https://images.unsplash.com/photo-1505693314120-0d443867891c?w=1200&q=80',
+                        'caption': 'Open-concept apartment living area',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=1200&q=80',
+                        'caption': 'City skyline view from balcony',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?w=1200&q=80',
+                        'caption': 'Primary bedroom with ensuite',
+                    },
+                ],
             },
             {
                 'title': 'Commercial Space in Merkato',
@@ -127,7 +170,22 @@ class Command(BaseCommand):
                 'status': 'active',
                 'is_published': True,
                 'is_active': True,
-                'views_count': 28
+                'views_count': 28,
+                'listed_date': timezone.now(),
+                'images': [
+                    {
+                        'url': 'https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=1200&q=80',
+                        'caption': 'Storefront facing high-traffic street',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1531973576160-7125cd663d86?w=1200&q=80',
+                        'caption': 'Spacious commercial interior',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80',
+                        'caption': 'Rear access and loading area',
+                    },
+                ],
             },
             {
                 'title': 'Luxury Villa in CMC',
@@ -160,7 +218,22 @@ class Command(BaseCommand):
                 'status': 'active',
                 'is_published': True,
                 'is_active': True,
-                'views_count': 67
+                'views_count': 67,
+                'listed_date': timezone.now(),
+                'images': [
+                    {
+                        'url': 'https://images.unsplash.com/photo-1616594039964-5e2b46b9aae1?w=1200&q=80',
+                        'caption': 'Villa exterior with infinity pool',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1600210491370-9bb39d1dc651?w=1200&q=80',
+                        'caption': 'Grand foyer with double staircase',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=1200&q=80',
+                        'caption': 'Gourmet kitchen and dining area',
+                    },
+                ],
             },
             {
                 'title': 'Townhouse in Kolfe',
@@ -193,54 +266,65 @@ class Command(BaseCommand):
                 'status': 'active',
                 'is_published': True,
                 'is_active': True,
-                'views_count': 23
+                'views_count': 23,
+                'listed_date': timezone.now(),
+                'images': [
+                    {
+                        'url': 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=1200&q=80',
+                        'caption': 'Townhouse front elevation',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=1200&q=80',
+                        'caption': 'Family-friendly living space',
+                    },
+                    {
+                        'url': 'https://images.unsplash.com/photo-1560184897-ae75f418493e?w=1200&q=80',
+                        'caption': 'Spacious backyard patio',
+                    },
+                ],
             }
         ]
-        
+ 
         properties_created = 0
-        
+ 
         for prop_data in sample_properties:
-            # Check if property already exists
-            if not Property.objects.filter(title=prop_data['title']).exists():
-                # Create the property
-                property_obj = Property.objects.create(
-                    owner=test_user,
-                    **prop_data
-                )
-                
-                # Create sample images for the property
-                sample_images = [
-                    {
-                        'image': 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800',
-                        'caption': 'Front view',
-                        'is_primary': True,
-                        'order': 0
-                    },
-                    {
-                        'image': 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800',
-                        'caption': 'Living room',
-                        'is_primary': False,
-                        'order': 1
-                    },
-                    {
-                        'image': 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800',
-                        'caption': 'Kitchen',
-                        'is_primary': False,
-                        'order': 2
-                    }
-                ]
-                
-                for img_data in sample_images:
-                    PropertyImage.objects.create(
-                        property=property_obj,
-                        **img_data
-                    )
-                
-                properties_created += 1
-                self.stdout.write(f'✅ Created property: {prop_data["title"]}')
+            prop_payload = prop_data.copy()
+            images_payload = prop_payload.pop('images', [])
+
+            area = prop_payload.get('area_sqm') or 0
+            if area:
+                prop_payload['price_per_sqm'] = (prop_payload['price'] / Decimal(area)).quantize(Decimal('0.01'))
+
+            property_obj, created = Property.objects.get_or_create(
+                title=prop_payload['title'],
+                defaults={**prop_payload, 'owner': agent_user},
+            )
+
+            if created:
+                self.stdout.write(f'✅ Created property: {prop_payload["title"]}')
             else:
-                self.stdout.write(f'⏭️ Property already exists: {prop_data["title"]}')
-        
+                for field, value in prop_payload.items():
+                    setattr(property_obj, field, value)
+                property_obj.owner = agent_user
+                property_obj.save()
+                self.stdout.write(f'🔄 Updated property: {prop_payload["title"]}')
+
+            # Refresh property images with curated gallery
+            PropertyImage.objects.filter(property=property_obj).delete()
+
+            for order, image_entry in enumerate(images_payload):
+                PropertyImage.objects.create(
+                    property=property_obj,
+                    image=image_entry['url'],
+                    caption=image_entry.get('caption'),
+                    is_primary=(order == 0),
+                    order=order,
+                )
+
+            properties_created += 1 if created else 0
+ 
+        cache.clear()
+        self.stdout.write('🧹 Cache cleared to reflect latest property data')
         self.stdout.write(f'🎉 Successfully created {properties_created} new properties!')
         self.stdout.write(f'📊 Total properties in database: {Property.objects.count()}')
         self.stdout.write(f'⭐ Featured properties: {Property.objects.filter(is_featured=True).count()}')
