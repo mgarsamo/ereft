@@ -78,15 +78,15 @@ class Command(BaseCommand):
                 'listed_date': timezone.now(),
                 'images': [
                     {
-                        'url': 'https://images.unsplash.com/photo-1600585154340-0ef3c08dc63f?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/186077/pexels-photo-186077.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Front elevation with landscaped garden',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/280229/pexels-photo-280229.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Sunlit living room with hardwood floors',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Modern kitchen with breakfast nook',
                     },
                 ],
@@ -126,15 +126,15 @@ class Command(BaseCommand):
                 'listed_date': timezone.now(),
                 'images': [
                     {
-                        'url': 'https://images.unsplash.com/photo-1505693314120-0d443867891c?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/439227/pexels-photo-439227.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Open-concept apartment living area',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/259962/pexels-photo-259962.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'City skyline view from balcony',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/271643/pexels-photo-271643.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Primary bedroom with ensuite',
                     },
                 ],
@@ -174,15 +174,15 @@ class Command(BaseCommand):
                 'listed_date': timezone.now(),
                 'images': [
                     {
-                        'url': 'https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/1643389/pexels-photo-1643389.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Storefront facing high-traffic street',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1531973576160-7125cd663d86?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/3184299/pexels-photo-3184299.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Spacious commercial interior',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/377861/pexels-photo-377861.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Rear access and loading area',
                     },
                 ],
@@ -222,15 +222,15 @@ class Command(BaseCommand):
                 'listed_date': timezone.now(),
                 'images': [
                     {
-                        'url': 'https://images.unsplash.com/photo-1616594039964-5e2b46b9aae1?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/208736/pexels-photo-208736.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Villa exterior with infinity pool',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1600210491370-9bb39d1dc651?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/703140/pexels-photo-703140.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Grand foyer with double staircase',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/2599626/pexels-photo-2599626.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Gourmet kitchen and dining area',
                     },
                 ],
@@ -270,15 +270,15 @@ class Command(BaseCommand):
                 'listed_date': timezone.now(),
                 'images': [
                     {
-                        'url': 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/259588/pexels-photo-259588.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Townhouse front elevation',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/271795/pexels-photo-271795.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Family-friendly living space',
                     },
                     {
-                        'url': 'https://images.unsplash.com/photo-1560184897-ae75f418493e?w=1200&q=80',
+                        'url': 'https://images.pexels.com/photos/1396122/pexels-photo-1396122.jpeg?auto=compress&cs=tinysrgb&w=1200',
                         'caption': 'Spacious backyard patio',
                     },
                 ],
