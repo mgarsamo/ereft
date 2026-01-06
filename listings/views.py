@@ -18,6 +18,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 # from django_filters.rest_framework import DjangoFilterBackend  # Disabled for deployment
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django_ratelimit.decorators import ratelimit
 from django_ratelimit.core import is_ratelimited
@@ -57,6 +58,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
+    CACHE_TIMEOUT = 60  # seconds
+
     def get_serializer_class(self):
         if self.action == 'create':
             return PropertyCreateSerializer
@@ -64,6 +67,53 @@ class PropertyViewSet(viewsets.ModelViewSet):
             return PropertyDetailSerializer
         else:
             return PropertyListSerializer
+
+    def list(self, request, *args, **kwargs):
+        """Return cached property list responses to reduce cold-start latency."""
+        cache_key = f"property_list:{request.get_full_path()}"
+        cached_payload = cache.get(cache_key)
+        if cached_payload is not None:
+            return Response(cached_payload)
+
+        # Allow `limit` query parameter as an alias for `page_size`
+        limit = request.query_params.get('limit')
+        if limit:
+            try:
+                request.GET._mutable = True  # type: ignore[attr-defined]
+                request.GET['page_size'] = limit
+            except AttributeError:
+                pass
+
+        response = super().list(request, *args, **kwargs)
+        cache.set(cache_key, response.data, timeout=self.CACHE_TIMEOUT)
+        return response
+
+    def create(self, request, *args, **kwargs):
+        """Create a property and return the full detail payload including generated ID."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        property_obj = self.perform_create(serializer)
+        property_obj = property_obj or serializer.instance
+
+        detail_serializer = PropertyDetailSerializer(
+            property_obj,
+            context=self.get_serializer_context()
+        )
+        headers = self.get_success_headers(detail_serializer.data)
+        return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Return cached property detail responses when available."""
+        pk = kwargs.get('pk')
+        cache_key = f"property_detail:{pk}"
+        cached_payload = cache.get(cache_key)
+        if cached_payload is not None:
+            return Response(cached_payload)
+
+        response = super().retrieve(request, *args, **kwargs)
+        cache.set(cache_key, response.data, timeout=self.CACHE_TIMEOUT)
+        return response
     
     def get_queryset(self):
         # Prefetch related data for better performance
@@ -94,6 +144,11 @@ class PropertyViewSet(viewsets.ModelViewSet):
         if city:
             queryset = queryset.filter(city__icontains=city)
         
+        featured = self.request.query_params.get('featured', '')
+        if featured:
+            truthy = str(featured).lower() in ['1', 'true', 'yes']
+            queryset = queryset.filter(is_featured=truthy)
+        
         return queryset
 
     def get_permissions(self):
@@ -108,25 +163,43 @@ class PropertyViewSet(viewsets.ModelViewSet):
             print(f"🏠 PropertyViewSet: Creating property for user: {user.username} (ID: {user.id})")
             print(f"🏠 PropertyViewSet: Property data: {serializer.validated_data}")
             
-            # Handle file uploads before saving
             images_data = []
+
+            # Accept pre-uploaded image URLs from payload (e.g., mobile app)
+            payload_images = serializer.validated_data.pop('images', []) if 'images' in serializer.validated_data else []
+            if payload_images:
+                print(f"🏠 PropertyViewSet: Received {len(payload_images)} pre-uploaded image URLs")
+                for idx, image_value in enumerate(payload_images, 1):
+                    if isinstance(image_value, dict):
+                        url = image_value.get('url') or image_value.get('secure_url')
+                    else:
+                        url = str(image_value)
+                    if url:
+                        images_data.append(url)
+                        print(f"✅ PropertyViewSet: Accepted image URL {idx}: {url}")
+
+            # Handle raw file uploads before saving (web form submissions)
             if hasattr(self.request, 'FILES') and 'images' in self.request.FILES:
-                image_count = len(self.request.FILES.getlist('images'))
-                print(f"🏠 PropertyViewSet: Uploading {image_count} images to Cloudinary")
+                image_files = self.request.FILES.getlist('images')
+                image_count = len(image_files)
+                print(f"🏠 PropertyViewSet: Processing {image_count} images")
                 
-                for idx, image_file in enumerate(self.request.FILES.getlist('images'), 1):
+                for idx, image_file in enumerate(image_files, 1):
                     try:
                         from .utils import handle_property_image_upload
                         temp_id = str(serializer.validated_data.get('title', 'temp'))[:20]
                         image_result = handle_property_image_upload(image_file, temp_id)
-                        images_data.append(image_result['url'])
-                        print(f"✅ PropertyViewSet: Image {idx}/{image_count} uploaded: {image_result['url']}")
+                        
+                        # Only add if upload was successful (returns dict with 'url')
+                        if image_result and isinstance(image_result, dict) and 'url' in image_result:
+                            images_data.append(image_result['url'])
+                            print(f"✅ PropertyViewSet: Image {idx}/{image_count} uploaded: {image_result['url']}")
+                        else:
+                            print(f"⚠️ PropertyViewSet: Image {idx}/{image_count} upload skipped (Cloudinary not configured or failed)")
                     except Exception as img_error:
                         print(f"⚠️ PropertyViewSet: Failed to upload image {idx}: {img_error}")
+                        print(f"   Property creation will continue without this image")
                         continue
-                
-                if 'images' in serializer.validated_data:
-                    del serializer.validated_data['images']
             
             # Create property with uploaded images
             property_obj = serializer.save(
@@ -140,7 +213,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
             
             # Create PropertyImage objects with the Cloudinary URLs
             if images_data:
-                for i, image_url in enumerate(images_data, 1):
+                unique_images = list(dict.fromkeys(images_data))
+                for i, image_url in enumerate(unique_images, 1):
                     try:
                         PropertyImage.objects.create(
                             property=property_obj,
@@ -148,7 +222,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
                             is_primary=(i == 1),
                             order=i
                         )
-                        print(f"✅ PropertyViewSet: PropertyImage {i}/{len(images_data)} created")
+                        print(f"✅ PropertyViewSet: PropertyImage {i}/{len(unique_images)} created")
                     except Exception as img_error:
                         print(f"⚠️ PropertyViewSet: Failed to create PropertyImage {i}: {img_error}")
                         continue
@@ -161,7 +235,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
             print(f"   Location: {property_obj.city}, {property_obj.country}")
             print(f"   Price: ETB {property_obj.price:,.2f}")
             print(f"   Images: {len(images_data)} uploaded")
-            
+            cache.clear()
             return property_obj
             
         except Exception as e:
@@ -175,37 +249,61 @@ class PropertyViewSet(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         """Override destroy to add logging and ensure proper deletion"""
-        instance = self.get_object()
-        user = request.user
-        
-        # Log deletion attempt
-        print(f"🗑️ PropertyViewSet: DELETE request initiated")
-        print(f"   Property ID: {instance.id}")
-        print(f"   Title: {instance.title}")
-        print(f"   Deleted by: {user.username} (ID: {user.id})")
-        print(f"   Is Owner: {instance.owner.id == user.id}")
-        
         try:
+            instance = self.get_object()
+            user = request.user
+
+            # Verify ownership
+            if not hasattr(instance, 'owner') or not instance.owner:
+                return Response(
+                    {'detail': 'Property owner information is missing.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if instance.owner_id != user.id:
+                return Response(
+                    {'detail': 'You can only delete your own listings.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Log deletion attempt
+            print(f"🗑️ PropertyViewSet: DELETE request initiated")
+            print(f"   Property ID: {instance.id}")
+            print(f"   Title: {instance.title}")
+            print(f"   Deleted by: {user.username} (ID: {user.id})")
+            print(f"   Owner ID: {instance.owner.id}")
+            print(f"   Is Owner: {instance.owner.id == user.id}")
+            
             property_id = instance.id
             property_title = instance.title
             owner_username = instance.owner.username
             
-            # Delete the property (images will cascade)
-            response = super().destroy(request, *args, **kwargs)
+            # Delete the property (images will cascade due to CASCADE delete)
+            super().destroy(request, *args, **kwargs)
             
             print(f"✅ PropertyViewSet: Property deleted successfully")
             print(f"   Deleted Property ID: {property_id}")
             print(f"   Deleted Title: {property_title}")
             print(f"   Owner: {owner_username}")
             
-            return response
+            # Clear cache
+            cache.clear()
+            
+            # Return 204 No Content (standard for DELETE)
+            return Response(status=status.HTTP_204_NO_CONTENT)
             
         except Exception as e:
             print(f"❌ PropertyViewSet: CRITICAL ERROR in destroy")
-            print(f"   Property ID: {instance.id}")
-            print(f"   User: {user.username}")
             print(f"   Error: {str(e)}")
-            raise e
+            print(f"   Error Type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            
+            # Return proper error response instead of raising
+            return Response(
+                {'detail': f'Failed to delete property: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=True, methods=['post'])
     def favorite(self, request, pk=None):
@@ -220,8 +318,12 @@ class PropertyViewSet(viewsets.ModelViewSet):
         
         if not created:
             favorite.delete()
+            cache.delete(f"property_detail:{property_obj.pk}")
+            cache.clear()
             return Response({'status': 'removed from favorites'})
         
+        cache.delete(f"property_detail:{property_obj.pk}")
+        cache.clear()
         return Response({'status': 'added to favorites'})
 
     @action(detail=True, methods=['post'])
@@ -262,16 +364,18 @@ class PropertyViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get property statistics"""
-        total_properties = Property.objects.filter(is_active=True).count()
-        for_sale = Property.objects.filter(is_active=True, listing_type='sale').count()
-        for_rent = Property.objects.filter(is_active=True, listing_type='rent').count()
-        avg_price = Property.objects.filter(is_active=True).aggregate(Avg('price'))['price__avg']
+        active_properties = Property.objects.filter(is_active=True, is_published=True)
+        total = active_properties.count()
+        for_sale = active_properties.filter(listing_type='sale').count()
+        for_rent = active_properties.filter(listing_type='rent').count()
+        average_price = active_properties.aggregate(avg_price=Avg('price'))['avg_price']
+        average_price = float(average_price) if average_price is not None else 0
         
         return Response({
-            'total_properties': total_properties,
+            'total': total,
             'for_sale': for_sale,
             'for_rent': for_rent,
-            'average_price': avg_price
+            'average_price': average_price,
         })
 
     @action(detail=False, methods=['get'])
@@ -428,6 +532,26 @@ class FavoriteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        property_id = request.data.get('property') or request.data.get('property_id')
+        if not property_id:
+            return Response({'detail': 'Property ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        property_obj = get_object_or_404(Property, pk=property_id)
+        favorite, created = Favorite.objects.get_or_create(user=request.user, property=property_obj)
+
+        serializer = self.get_serializer(favorite)
+        if created:
+            cache.delete(f"property_detail:{property_obj.pk}")
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        property_id = kwargs.get('pk')
+        favorite = get_object_or_404(Favorite, user=request.user, property_id=property_id)
+        favorite.delete()
+        cache.delete(f"property_detail:{property_id}")
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class UserProfileViewSet(viewsets.ModelViewSet):
     """

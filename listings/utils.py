@@ -299,9 +299,19 @@ def handle_property_image_upload(image_file, property_id):
         property_id: The property ID for organization
     
     Returns:
-        dict: Image data with Cloudinary URL and metadata
+        dict: Image data with Cloudinary URL and metadata, or None if upload fails
     """
     try:
+        # Check if Cloudinary is configured
+        from django.conf import settings
+        cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', None)
+        api_key = getattr(settings, 'CLOUDINARY_API_KEY', None)
+        api_secret = getattr(settings, 'CLOUDINARY_API_SECRET', None)
+        
+        if not all([cloud_name, api_key, api_secret]):
+            print(f"⚠️ Cloudinary not configured - skipping image upload")
+            return None
+        
         # Upload to Cloudinary
         result = cloudinary.uploader.upload(
             image_file,
@@ -324,8 +334,10 @@ def handle_property_image_upload(image_file, property_id):
         }
         
     except Exception as e:
-        print(f"❌ Error handling property image upload: {str(e)}")
-        raise e
+        print(f"⚠️ Error handling property image upload: {str(e)}")
+        print(f"   Property creation will continue without this image")
+        # Return None instead of raising - allow property creation without images
+        return None
 
 def send_verification_email(user, request):
     """
