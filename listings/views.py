@@ -341,8 +341,9 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     # Delete related objects first to avoid foreign key constraints
                     # Delete property images
                     try:
-                        image_count = instance.images.count()
-                        instance.images.all().delete()
+                        image_qs = instance.images.all()
+                        image_count = image_qs.count()
+                        image_qs.delete()
                         print(f"   Deleted {image_count} property images")
                     except Exception as img_error:
                         print(f"   Note: Error deleting images: {img_error}")
@@ -350,8 +351,9 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     # Delete favorites referencing this property
                     try:
                         from .models import Favorite
-                        fav_count = Favorite.objects.filter(property=instance).count()
-                        Favorite.objects.filter(property=instance).delete()
+                        fav_qs = Favorite.objects.filter(property=instance)
+                        fav_count = fav_qs.count()
+                        fav_qs.delete()
                         print(f"   Deleted {fav_count} favorites for this property")
                     except Exception as fav_error:
                         print(f"   Note: Error deleting favorites: {fav_error}")
@@ -377,26 +379,27 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     except Exception:
                         pass
                     
-                    # Now delete the property itself using raw SQL to bypass any foreign key issues
-                    from django.db import connection
-                    from django.conf import settings
-                    
-                    db_backend = settings.DATABASES['default']['ENGINE']
-                    
-                    with connection.cursor() as cursor:
-                        if 'postgresql' in db_backend:
-                            # PostgreSQL - use UUID casting
-                            cursor.execute("DELETE FROM listings_property WHERE id = %s::uuid", [property_uuid_str])
-                        else:
-                            # SQLite
-                            cursor.execute("DELETE FROM listings_property WHERE id = ?", [property_uuid_str])
+                    # Preferred: delete the property via ORM queryset (avoids stale instance issues)
+                    from .models import Property as PropertyModel
+                    deleted_count, _ = PropertyModel.objects.filter(pk=property_id).delete()
+                    if deleted_count == 0:
+                        # Fallback: raw SQL deletion using dynamic table name
+                        from django.db import connection
+                        from django.conf import settings
+                        db_backend = settings.DATABASES['default']['ENGINE']
+                        property_table = PropertyModel._meta.db_table  # dynamic, e.g., 'listings_property'
+                        with connection.cursor() as cursor:
+                            if 'postgresql' in db_backend:
+                                cursor.execute(f"DELETE FROM {property_table} WHERE id = %s::uuid", [property_uuid_str])
+                            else:
+                                cursor.execute(f"DELETE FROM {property_table} WHERE id = ?", [property_uuid_str])
                     
                     # Verify deletion immediately
                     try:
-                        Property.objects.get(pk=property_id)
+                        PropertyModel.objects.get(pk=property_id)
                         # If we get here, property still exists
                         raise Exception("Property still exists after deletion")
-                    except Property.DoesNotExist:
+                    except PropertyModel.DoesNotExist:
                         # Property successfully deleted
                         print(f"✅ PropertyViewSet: Property {property_uuid_str} deleted and verified")
                     
@@ -412,18 +415,20 @@ class PropertyViewSet(viewsets.ModelViewSet):
                         from django.conf import settings
                         
                         db_backend = settings.DATABASES['default']['ENGINE']
+                        from .models import Property as PropertyModel
+                        property_table = PropertyModel._meta.db_table
                         
                         with connection.cursor() as cursor:
                             if 'postgresql' in db_backend:
-                                cursor.execute("DELETE FROM listings_property WHERE id = %s::uuid", [property_uuid_str])
+                                cursor.execute(f"DELETE FROM {property_table} WHERE id = %s::uuid", [property_uuid_str])
                             else:
-                                cursor.execute("DELETE FROM listings_property WHERE id = ?", [property_uuid_str])
+                                cursor.execute(f"DELETE FROM {property_table} WHERE id = ?", [property_uuid_str])
                         
                         # Verify again
                         try:
-                            Property.objects.get(pk=property_id)
+                            PropertyModel.objects.get(pk=property_id)
                             raise Exception("Property still exists after fallback deletion")
-                        except Property.DoesNotExist:
+                        except PropertyModel.DoesNotExist:
                             print(f"✅ PropertyViewSet: Property deleted via fallback SQL")
                     except Exception as fallback_error:
                         print(f"❌ PropertyViewSet: Fallback deletion also failed: {fallback_error}")
