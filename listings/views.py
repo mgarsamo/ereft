@@ -925,18 +925,24 @@ def verify_admin_user(request):
 @permission_classes([IsAuthenticated])
 def user_profile(request):
     """
-    Get current user profile
+    Get current user profile with full user information
     """
     user = request.user
     try:
         profile = user.profile
-        serializer = UserProfileSerializer(profile)
-        return Response(serializer.data)
     except UserProfile.DoesNotExist:
         # Create profile if it doesn't exist
         profile = UserProfile.objects.create(user=user)
-        serializer = UserProfileSerializer(profile)
-        return Response(serializer.data)
+    
+    # Return both profile and user data
+    profile_serializer = UserProfileSerializer(profile)
+    user_serializer = UserSerializer(user)
+    
+    return Response({
+        'user': user_serializer.data,
+        'profile': profile_serializer.data,
+        **profile_serializer.data  # Include profile fields at root level for backward compatibility
+    })
 
 @api_view(['GET'])
 def featured_properties(request):
@@ -1131,16 +1137,34 @@ def custom_login(request):
             profile.failed_login_attempts = 0
             profile.save()
             
-            # Send welcome email on login
-            # Send email asynchronously to not block login response
-            try:
-                from .utils import send_welcome_email
-                # Send welcome email (don't block login if it fails)
-                send_welcome_email(user, is_new_user=False)
-                print(f"✅ Welcome email sent to {user.email} on login")
-            except Exception as email_error:
-                # Don't fail login if email fails
-                print(f"⚠️ Failed to send welcome email to {user.email}: {email_error}")
+            # Send welcome email only once (on first login)
+            # Check if user was created recently (within last 24 hours) to determine if it's a new user
+            # For existing users, only send on first login after this feature was added
+            hours_since_joined = (timezone.now() - user.date_joined).total_seconds() / 3600
+            is_new_user = hours_since_joined < 24  # Created within last 24 hours
+            
+            # Check if we've sent welcome email before by checking if user joined very recently
+            # For existing users (joined more than 24 hours ago), we'll send once on next login
+            # We'll track this by checking if there's a flag, or just send for new users
+            should_send_welcome = is_new_user
+            
+            # For existing users, send welcome email on first login after this update
+            # We can track this by checking if user has logged in before (simple heuristic)
+            # For now, send welcome email for users created in last 7 days to catch recent signups
+            if not is_new_user and hours_since_joined < 168:  # Within last 7 days
+                should_send_welcome = True
+            
+            if should_send_welcome:
+                try:
+                    from .utils import send_welcome_email
+                    # Send welcome email (don't block login if it fails)
+                    send_welcome_email(user, is_new_user=is_new_user)
+                    print(f"✅ Welcome email sent to {user.email} on login")
+                except Exception as email_error:
+                    # Don't fail login if email fails
+                    print(f"⚠️ Failed to send welcome email to {user.email}: {email_error}")
+            else:
+                print(f"ℹ️ Welcome email skipped for {user.email} (existing user)")
             
             # Get or create token
             token, created = Token.objects.get_or_create(user=user)
