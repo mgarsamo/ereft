@@ -63,26 +63,98 @@ def send_property_inquiry_email(contact):
             fail_silently=False,
         )
 
-def send_welcome_email(user):
+def send_welcome_email(user, is_new_user=False):
     """
-    Send welcome email to new users
+    Send welcome email to users on login or registration
     """
-    subject = 'Welcome to Ereft - Your Real Estate Platform'
-    
-    html_message = render_to_string('emails/welcome.html', {
-        'user': user,
-    })
-    
-    plain_message = strip_tags(html_message)
-    
-    send_mail(
-        subject=subject,
-        message=plain_message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        html_message=html_message,
-        fail_silently=False,
-    )
+    try:
+        if is_new_user:
+            subject = 'Welcome to Ereft - Your Real Estate Platform'
+            greeting = f'Welcome to Ereft, {user.first_name or user.username}!'
+            message_intro = 'Thank you for joining Ereft, Ethiopia\'s premier real estate platform.'
+        else:
+            subject = 'Welcome Back to Ereft'
+            greeting = f'Welcome back, {user.first_name or user.username}!'
+            message_intro = 'Thank you for using Ereft, Ethiopia\'s premier real estate platform.'
+        
+        # Create email content
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
+                .button {{ display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+                .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Ereft</h1>
+                    <p>Ethiopia's Premier Real Estate Platform</p>
+                </div>
+                <div class="content">
+                    <h2>{greeting}</h2>
+                    <p>{message_intro}</p>
+                    <p>You can now:</p>
+                    <ul>
+                        <li>Browse and search properties across Ethiopia</li>
+                        <li>Save your favorite listings</li>
+                        <li>List your own properties</li>
+                        <li>Connect with property owners and agents</li>
+                    </ul>
+                    <a href="https://www.ereft.com" class="button">Visit Ereft</a>
+                    <p>If you have any questions, feel free to reach out to us.</p>
+                    <p>Best regards,<br>The Ereft Team</p>
+                </div>
+                <div class="footer">
+                    <p>This email was sent from melaku.garsamo@gmail.com</p>
+                    <p>&copy; 2024 Ereft. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        plain_message = f"""
+        {greeting}
+        
+        {message_intro}
+        
+        You can now:
+        - Browse and search properties across Ethiopia
+        - Save your favorite listings
+        - List your own properties
+        - Connect with property owners and agents
+        
+        Visit us at: https://www.ereft.com
+        
+        If you have any questions, feel free to reach out to us.
+        
+        Best regards,
+        The Ereft Team
+        
+        This email was sent from melaku.garsamo@gmail.com
+        """
+        
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email='melaku.garsamo@gmail.com',  # Send from specified email
+            recipient_list=[user.email],
+            html_message=html_content,
+            fail_silently=False,
+        )
+        
+        print(f"✅ Welcome email sent to {user.email}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to send welcome email to {user.email}: {str(e)}")
+        return False
 
 def compress_image(image_field, max_size=(800, 600), quality=85):
     """

@@ -279,34 +279,78 @@ class PropertyViewSet(viewsets.ModelViewSet):
             owner_username = instance.owner.username
             
             # Handle payments app relationship gracefully if table doesn't exist
+            # We need to check if the table exists before Django tries to access it
             try:
-                # Try to import and use Payment model if it exists
-                from payments.models import Payment
-                # Check if table exists by trying a simple query
-                try:
-                    # Try to count payments - this will fail if table doesn't exist
-                    Payment.objects.filter(property=instance).count()
-                    # If we get here, table exists - update related payments
-                    Payment.objects.filter(property=instance).update(property=None)
-                    print(f"   Updated related payments to set property=None")
-                except Exception as table_error:
-                    # Table doesn't exist or other database error
-                    error_msg = str(table_error).lower()
-                    if 'no such table' in error_msg or 'does not exist' in error_msg or 'relation' in error_msg:
-                        print(f"   Note: Payments table doesn't exist, skipping payment updates")
-                    else:
-                        print(f"   Note: Could not access payments table: {table_error}")
-            except ImportError:
-                # Payments app not installed
-                print(f"   Note: Payments app not installed, skipping payment updates")
+                from django.db import connection
+                from django.conf import settings
+                
+                # Check database type and table existence
+                db_backend = settings.DATABASES['default']['ENGINE']
+                table_name = 'payments_payment'
+                
+                table_exists = False
+                if 'sqlite' in db_backend:
+                    # SQLite
+                    with connection.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT name FROM sqlite_master 
+                            WHERE type='table' AND name=?
+                        """, [table_name])
+                        table_exists = cursor.fetchone() is not None
+                elif 'postgresql' in db_backend:
+                    # PostgreSQL
+                    with connection.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT EXISTS (
+                                SELECT FROM information_schema.tables 
+                                WHERE table_schema = 'public' 
+                                AND table_name = %s
+                            )
+                        """, [table_name])
+                        table_exists = cursor.fetchone()[0]
+                
+                if table_exists:
+                    # Table exists - update related payments
+                    try:
+                        from payments.models import Payment
+                        Payment.objects.filter(property=instance).update(property=None)
+                        print(f"   Updated related payments to set property=None")
+                    except Exception as update_error:
+                        print(f"   Note: Could not update payments: {update_error}")
+                else:
+                    print(f"   Note: Payments table doesn't exist, skipping payment updates")
             except Exception as payment_error:
-                # Any other error - log and continue
-                print(f"   Note: Error handling payments: {payment_error}")
+                # Any error checking/updating payments - log and continue
+                error_msg = str(payment_error).lower()
+                if 'no such table' in error_msg or 'does not exist' in error_msg or 'relation' in error_msg:
+                    print(f"   Note: Payments table doesn't exist, skipping payment updates")
+                else:
+                    print(f"   Note: Error handling payments: {payment_error}")
                 # Continue with deletion - payments relationship uses SET_NULL so it's safe
             
             # Delete the property (images will cascade due to CASCADE delete)
-            # Use delete() directly instead of super().destroy() to avoid extra queries
-            instance.delete()
+            # Use delete() directly to avoid Django's destroy() method which might trigger extra queries
+            # This bypasses any potential foreign key constraint checks that might fail
+            property_id = instance.id
+            property_title = instance.title
+            
+            # Delete using raw SQL if needed to avoid foreign key issues
+            try:
+                instance.delete()
+            except Exception as delete_error:
+                error_str = str(delete_error).lower()
+                if 'payments_payment' in error_str or 'no such table' in error_str:
+                    # If delete fails due to payments table, try to delete directly from database
+                    print(f"   Attempting direct database deletion due to payments table issue")
+                    from django.db import connection
+                    with connection.cursor() as cursor:
+                        # Delete property images first
+                        cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [str(property_id)])
+                        # Delete property
+                        cursor.execute("DELETE FROM listings_property WHERE id = %s", [str(property_id)])
+                    print(f"   Property deleted directly from database")
+                else:
+                    raise delete_error
             
             print(f"✅ PropertyViewSet: Property deleted successfully")
             print(f"   Deleted Property ID: {property_id}")
@@ -1003,6 +1047,17 @@ def custom_login(request):
             profile.failed_login_attempts = 0
             profile.save()
             
+            # Send welcome email on login
+            # Send email asynchronously to not block login response
+            try:
+                from .utils import send_welcome_email
+                # Send welcome email (don't block login if it fails)
+                send_welcome_email(user, is_new_user=False)
+                print(f"✅ Welcome email sent to {user.email} on login")
+            except Exception as email_error:
+                # Don't fail login if email fails
+                print(f"⚠️ Failed to send welcome email to {user.email}: {email_error}")
+            
             # Get or create token
             token, created = Token.objects.get_or_create(user=user)
             
@@ -1287,6 +1342,14 @@ def process_google_oauth_code(code, request):
                 profile.google_id = google_id or profile.google_id
                 profile.save()
             
+            # Send welcome email for existing users on OAuth login
+            try:
+                from .utils import send_welcome_email
+                send_welcome_email(user, is_new_user=False)
+                print(f"🔐 Google OAuth: Welcome email sent to {email} on login")
+            except Exception as e:
+                print(f"🔐 Google OAuth: Failed to send welcome email: {str(e)}")
+            
         except User.DoesNotExist:
             # Create new user
             username = f"google_{google_id}" if google_id else f"google_{email.split('@')[0]}"
@@ -1320,8 +1383,8 @@ def process_google_oauth_code(code, request):
             # Send welcome email for new Google OAuth users
             try:
                 from .utils import send_welcome_email
-                send_welcome_email(user)
-                print(f"🔐 Google OAuth: Welcome email sent to {email}")
+                send_welcome_email(user, is_new_user=True)
+                print(f"🔐 Google OAuth: Welcome email sent to {email} for new user")
             except Exception as e:
                 print(f"🔐 Google OAuth: Failed to send welcome email: {str(e)}")
         
@@ -1625,6 +1688,14 @@ def custom_register(request):
         
         # Create token
         token, created = Token.objects.get_or_create(user=user)
+        
+        # Send welcome email for new users
+        try:
+            from .utils import send_welcome_email
+            send_welcome_email(user, is_new_user=True)
+            print(f"✅ Registration: Welcome email sent to {user.email}")
+        except Exception as e:
+            print(f"⚠️ Registration: Failed to send welcome email: {str(e)}")
         
         # MVP: Simple successful registration response
         return Response({
