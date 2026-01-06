@@ -278,8 +278,35 @@ class PropertyViewSet(viewsets.ModelViewSet):
             property_title = instance.title
             owner_username = instance.owner.username
             
+            # Handle payments app relationship gracefully if table doesn't exist
+            try:
+                # Try to import and use Payment model if it exists
+                from payments.models import Payment
+                # Check if table exists by trying a simple query
+                try:
+                    # Try to count payments - this will fail if table doesn't exist
+                    Payment.objects.filter(property=instance).count()
+                    # If we get here, table exists - update related payments
+                    Payment.objects.filter(property=instance).update(property=None)
+                    print(f"   Updated related payments to set property=None")
+                except Exception as table_error:
+                    # Table doesn't exist or other database error
+                    error_msg = str(table_error).lower()
+                    if 'no such table' in error_msg or 'does not exist' in error_msg or 'relation' in error_msg:
+                        print(f"   Note: Payments table doesn't exist, skipping payment updates")
+                    else:
+                        print(f"   Note: Could not access payments table: {table_error}")
+            except ImportError:
+                # Payments app not installed
+                print(f"   Note: Payments app not installed, skipping payment updates")
+            except Exception as payment_error:
+                # Any other error - log and continue
+                print(f"   Note: Error handling payments: {payment_error}")
+                # Continue with deletion - payments relationship uses SET_NULL so it's safe
+            
             # Delete the property (images will cascade due to CASCADE delete)
-            super().destroy(request, *args, **kwargs)
+            # Use delete() directly instead of super().destroy() to avoid extra queries
+            instance.delete()
             
             print(f"✅ PropertyViewSet: Property deleted successfully")
             print(f"   Deleted Property ID: {property_id}")
@@ -298,6 +325,19 @@ class PropertyViewSet(viewsets.ModelViewSet):
             print(f"   Error Type: {type(e).__name__}")
             import traceback
             traceback.print_exc()
+            
+            # Check if error is related to missing payments table
+            error_str = str(e).lower()
+            if 'payments_payment' in error_str or 'no such table' in error_str:
+                # Try to delete without handling payments
+                try:
+                    instance = self.get_object()
+                    if instance.owner_id == request.user.id:
+                        instance.delete()
+                        cache.clear()
+                        return Response(status=status.HTTP_204_NO_CONTENT)
+                except:
+                    pass
             
             # Return proper error response instead of raising
             return Response(
@@ -534,24 +574,66 @@ class FavoriteViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        property_id = request.data.get('property') or request.data.get('property_id')
-        if not property_id:
-            return Response({'detail': 'Property ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        """Create a favorite for a property"""
+        try:
+            property_id = request.data.get('property') or request.data.get('property_id')
+            if not property_id:
+                return Response(
+                    {'detail': 'Property ID is required.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        property_obj = get_object_or_404(Property, pk=property_id)
-        favorite, created = Favorite.objects.get_or_create(user=request.user, property=property_obj)
+            property_obj = get_object_or_404(Property, pk=property_id)
+            favorite, created = Favorite.objects.get_or_create(user=request.user, property=property_obj)
 
-        serializer = self.get_serializer(favorite)
-        if created:
+            # Clear relevant caches
             cache.delete(f"property_detail:{property_obj.pk}")
-        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+            if created:
+                cache.clear()  # Clear all caches to ensure favorites are updated everywhere
+                print(f"✅ FavoriteViewSet: Favorite created for property {property_id} by user {request.user.username}")
+            else:
+                print(f"ℹ️ FavoriteViewSet: Favorite already exists for property {property_id} by user {request.user.username}")
+
+            serializer = self.get_serializer(favorite)
+            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        except Exception as e:
+            print(f"❌ FavoriteViewSet: Error creating favorite: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'detail': f'Failed to create favorite: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def destroy(self, request, *args, **kwargs):
-        property_id = kwargs.get('pk')
-        favorite = get_object_or_404(Favorite, user=request.user, property_id=property_id)
-        favorite.delete()
-        cache.delete(f"property_detail:{property_id}")
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        """Delete a favorite by property ID"""
+        try:
+            property_id = kwargs.get('pk')
+            if not property_id:
+                return Response(
+                    {'detail': 'Property ID is required.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find and delete the favorite
+            favorite = get_object_or_404(Favorite, user=request.user, property_id=property_id)
+            favorite.delete()
+            
+            # Clear relevant caches
+            cache.delete(f"property_detail:{property_id}")
+            cache.clear()  # Clear all caches to ensure favorites are updated everywhere
+            
+            print(f"✅ FavoriteViewSet: Favorite deleted for property {property_id} by user {request.user.username}")
+            
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            print(f"❌ FavoriteViewSet: Error deleting favorite: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'detail': f'Failed to delete favorite: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class UserProfileViewSet(viewsets.ModelViewSet):
     """
