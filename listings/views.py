@@ -248,237 +248,49 @@ class PropertyViewSet(viewsets.ModelViewSet):
             raise e
     
     def destroy(self, request, *args, **kwargs):
-        """Override destroy to add logging and ensure proper deletion"""
+        """
+        Delete a property - simplified and bulletproof
+        """
         try:
+            # Get the property
             instance = self.get_object()
             user = request.user
 
             # Verify ownership
-            if not hasattr(instance, 'owner') or not instance.owner:
-                return Response(
-                    {'detail': 'Property owner information is missing.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            if instance.owner_id != user.id:
+            if not instance.owner or instance.owner_id != user.id:
                 return Response(
                     {'detail': 'You can only delete your own listings.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
             
-            # Log deletion attempt
-            print(f"🗑️ PropertyViewSet: DELETE request initiated")
-            print(f"   Property ID: {instance.id}")
-            print(f"   Title: {instance.title}")
-            print(f"   Deleted by: {user.username} (ID: {user.id})")
-            print(f"   Owner ID: {instance.owner.id}")
-            print(f"   Is Owner: {instance.owner.id == user.id}")
-            
-            property_id = instance.id
+            # Store info for logging
+            property_id = str(instance.id)
             property_title = instance.title
-            owner_username = instance.owner.username
             
-            # Handle payments app relationship gracefully if table doesn't exist
-            # We need to check if the table exists before Django tries to access it
-            try:
-                from django.db import connection
-                from django.conf import settings
-                
-                # Check database type and table existence
-                db_backend = settings.DATABASES['default']['ENGINE']
-                table_name = 'payments_payment'
-                
-                table_exists = False
-                if 'sqlite' in db_backend:
-                    # SQLite
-                    with connection.cursor() as cursor:
-                        cursor.execute("""
-                            SELECT name FROM sqlite_master 
-                            WHERE type='table' AND name=?
-                        """, [table_name])
-                        table_exists = cursor.fetchone() is not None
-                elif 'postgresql' in db_backend:
-                    # PostgreSQL
-                    with connection.cursor() as cursor:
-                        cursor.execute("""
-                            SELECT EXISTS (
-                                SELECT FROM information_schema.tables 
-                                WHERE table_schema = 'public' 
-                                AND table_name = %s
-                            )
-                        """, [table_name])
-                        table_exists = cursor.fetchone()[0]
-                
-                if table_exists:
-                    # Table exists - update related payments
-                    try:
-                        from payments.models import Payment
-                        Payment.objects.filter(property=instance).update(property=None)
-                        print(f"   Updated related payments to set property=None")
-                    except Exception as update_error:
-                        print(f"   Note: Could not update payments: {update_error}")
-                else:
-                    print(f"   Note: Payments table doesn't exist, skipping payment updates")
-            except Exception as payment_error:
-                # Any error checking/updating payments - log and continue
-                error_msg = str(payment_error).lower()
-                if 'no such table' in error_msg or 'does not exist' in error_msg or 'relation' in error_msg:
-                    print(f"   Note: Payments table doesn't exist, skipping payment updates")
-                else:
-                    print(f"   Note: Error handling payments: {payment_error}")
-                # Continue with deletion - payments relationship uses SET_NULL so it's safe
+            print(f"🗑️ Deleting property: {property_title} (ID: {property_id})")
             
-            # Store property info before deletion
-            property_id = instance.id
-            property_title = instance.title
-            property_uuid_str = str(property_id)
+            # Simple deletion - Django CASCADE will handle all related objects
+            instance.delete()
             
-            # Use database transaction to ensure atomic deletion
-            from django.db import transaction
+            print(f"✅ Property deleted: {property_title}")
             
-            try:
-                with transaction.atomic():
-                    # Delete related objects first to avoid foreign key constraints
-                    # Delete property images
-                    try:
-                        image_qs = instance.images.all()
-                        image_count = image_qs.count()
-                        image_qs.delete()
-                        print(f"   Deleted {image_count} property images")
-                    except Exception as img_error:
-                        print(f"   Note: Error deleting images: {img_error}")
-                    
-                    # Delete favorites referencing this property
-                    try:
-                        from .models import Favorite
-                        fav_qs = Favorite.objects.filter(property=instance)
-                        fav_count = fav_qs.count()
-                        fav_qs.delete()
-                        print(f"   Deleted {fav_count} favorites for this property")
-                    except Exception as fav_error:
-                        print(f"   Note: Error deleting favorites: {fav_error}")
-                    
-                    # Delete property views
-                    try:
-                        from .models import PropertyView
-                        PropertyView.objects.filter(property=instance).delete()
-                    except Exception:
-                        pass
-                    
-                    # Delete contacts
-                    try:
-                        from .models import Contact
-                        Contact.objects.filter(property=instance).delete()
-                    except Exception:
-                        pass
-                    
-                    # Delete reviews
-                    try:
-                        from .models import PropertyReview
-                        PropertyReview.objects.filter(property=instance).delete()
-                    except Exception:
-                        pass
-                    
-                    # Preferred: delete the property via ORM queryset (avoids stale instance issues)
-                    from .models import Property as PropertyModel
-                    deleted_count, _ = PropertyModel.objects.filter(pk=property_id).delete()
-                    if deleted_count == 0:
-                        # Fallback: raw SQL deletion using dynamic table name
-                        from django.db import connection
-                        from django.conf import settings
-                        db_backend = settings.DATABASES['default']['ENGINE']
-                        property_table = PropertyModel._meta.db_table  # dynamic, e.g., 'listings_property'
-                        with connection.cursor() as cursor:
-                            if 'postgresql' in db_backend:
-                                cursor.execute(f"DELETE FROM {property_table} WHERE id = %s::uuid", [property_uuid_str])
-                            else:
-                                cursor.execute(f"DELETE FROM {property_table} WHERE id = ?", [property_uuid_str])
-                    
-                    # Verify deletion immediately
-                    try:
-                        PropertyModel.objects.get(pk=property_id)
-                        # If we get here, property still exists
-                        raise Exception("Property still exists after deletion")
-                    except PropertyModel.DoesNotExist:
-                        # Property successfully deleted
-                        print(f"✅ PropertyViewSet: Property {property_uuid_str} deleted and verified")
-                    
-            except Exception as delete_error:
-                error_str = str(delete_error).lower()
-                print(f"❌ PropertyViewSet: Deletion failed: {delete_error}")
-                
-                # If transaction fails, try direct SQL deletion as last resort
-                if 'payments_payment' in error_str or 'no such table' in error_str or 'relation' in error_str:
-                    try:
-                        print(f"   Attempting direct SQL deletion as fallback")
-                        from django.db import connection
-                        from django.conf import settings
-                        
-                        db_backend = settings.DATABASES['default']['ENGINE']
-                        from .models import Property as PropertyModel
-                        property_table = PropertyModel._meta.db_table
-                        
-                        with connection.cursor() as cursor:
-                            if 'postgresql' in db_backend:
-                                cursor.execute(f"DELETE FROM {property_table} WHERE id = %s::uuid", [property_uuid_str])
-                            else:
-                                cursor.execute(f"DELETE FROM {property_table} WHERE id = ?", [property_uuid_str])
-                        
-                        # Verify again
-                        try:
-                            PropertyModel.objects.get(pk=property_id)
-                            raise Exception("Property still exists after fallback deletion")
-                        except PropertyModel.DoesNotExist:
-                            print(f"✅ PropertyViewSet: Property deleted via fallback SQL")
-                    except Exception as fallback_error:
-                        print(f"❌ PropertyViewSet: Fallback deletion also failed: {fallback_error}")
-                        raise fallback_error
-                else:
-                    raise delete_error
-            
-            print(f"✅ PropertyViewSet: Property deleted successfully")
-            print(f"   Deleted Property ID: {property_uuid_str}")
-            print(f"   Deleted Title: {property_title}")
-            print(f"   Owner: {owner_username}")
-            
-            # Clear all caches
+            # Clear cache
             try:
                 cache.clear()
-                cache.delete(f"property_detail:{property_uuid_str}")
-                print(f"   Cache cleared")
-            except Exception as cache_error:
-                print(f"   Note: Cache clear error (non-critical): {cache_error}")
+            except:
+                pass
             
-            # Return 204 No Content (standard for DELETE)
             return Response(status=status.HTTP_204_NO_CONTENT)
             
+        except Property.DoesNotExist:
+            return Response({'detail': 'Property not found.'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            print(f"❌ PropertyViewSet: CRITICAL ERROR in destroy")
-            print(f"   Error: {str(e)}")
-            print(f"   Error Type: {type(e).__name__}")
+            print(f"❌ Delete error: {str(e)}")
             import traceback
             traceback.print_exc()
-            
-            # Check if error is related to missing payments table
-            error_str = str(e).lower()
-            if 'payments_payment' in error_str or 'no such table' in error_str:
-                # Try to delete without handling payments
-                try:
-                    instance = self.get_object()
-                    if instance.owner_id == request.user.id:
-                        instance.delete()
-                        cache.clear()
-                        return Response(status=status.HTTP_204_NO_CONTENT)
-                except:
-                    pass
-            
-            # Return proper error response instead of raising
-            return Response(
-                {'detail': f'Failed to delete property: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({'detail': f'Failed to delete property: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=True, methods=['post'])
+
     def favorite(self, request, pk=None):
         """Toggle favorite status for a property"""
         property_obj = self.get_object()
