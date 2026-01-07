@@ -305,15 +305,18 @@ DJOSER = {
 }
 
 # ------------------------------------------------------
-# Email Configuration for Verification
+# Email Configuration for Verification (SendGrid)
 # ------------------------------------------------------
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+# Check for SENDGRID_ prefixed vars first, then fall back to EMAIL_ vars
+EMAIL_HOST = config('SENDGRID_EMAIL_HOST', default=config('EMAIL_HOST', default='smtp.sendgrid.net'))
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@ereft.com')
+EMAIL_HOST_USER = config('SENDGRID_EMAIL_USER', default=config('EMAIL_USER', default=config('EMAIL_HOST_USER', default='apikey')))
+EMAIL_HOST_PASSWORD = config('SENDGRID_EMAIL_PASS', default=config('EMAIL_PASS', default=config('EMAIL_HOST_PASSWORD', default='')))
+# Parse EMAIL_FROM if it contains name, otherwise use as-is
+email_from_raw = config('SENDGRID_EMAIL_FROM', default=config('EMAIL_FROM', default=config('DEFAULT_FROM_EMAIL', default='Ereft Admin <admin@ereft.com>')))
+DEFAULT_FROM_EMAIL = email_from_raw.strip('"').strip("'")  # Remove quotes if present
 
 # ------------------------------------------------------
 # Twilio Configuration for SMS Verification

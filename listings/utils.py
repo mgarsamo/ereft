@@ -6,6 +6,7 @@
 import os
 import json
 import requests
+from datetime import datetime
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
@@ -63,97 +64,237 @@ def send_property_inquiry_email(contact):
             fail_silently=False,
         )
 
-def send_welcome_email(user, is_new_user=False):
+def send_welcome_email(user, is_new_user=False, test_email=None):
     """
-    Send welcome email to users on login or registration
+    Send welcome email to new users using SendGrid
+    Only sends once per user (for new users)
     """
     try:
-        if is_new_user:
-            subject = 'Welcome to Ereft - Your Real Estate Platform'
-            greeting = f'Welcome to Ereft, {user.first_name or user.username}!'
-            message_intro = 'Thank you for joining Ereft, Ethiopia\'s premier real estate platform.'
-        else:
-            subject = 'Welcome Back to Ereft'
-            greeting = f'Welcome back, {user.first_name or user.username}!'
-            message_intro = 'Thank you for using Ereft, Ethiopia\'s premier real estate platform.'
+        # Only send welcome email for new users
+        if not is_new_user:
+            print(f"ℹ️ Welcome email skipped for {user.email} (existing user)")
+            return False
         
-        # Create email content
+        # Use test email if provided, otherwise use user's email
+        recipient_email = test_email if test_email else user.email
+        
+        # Subject line with emojis
+        subject = '🎉 Welcome to Ereft! Your Account is Ready 🚀'
+        
+        # User's name for personalization
+        user_name = user.first_name or user.username or 'there'
+        
+        # Create engaging HTML email content with emojis
         html_content = f"""
         <!DOCTYPE html>
         <html>
         <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
-                .button {{ display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
-                .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 12px; }}
+                body {{ 
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+                    line-height: 1.6; 
+                    color: #333; 
+                    margin: 0; 
+                    padding: 0;
+                    background-color: #f5f5f5;
+                }}
+                .container {{ 
+                    max-width: 600px; 
+                    margin: 0 auto; 
+                    padding: 0;
+                    background-color: #ffffff;
+                }}
+                .header {{ 
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    color: white; 
+                    padding: 40px 30px; 
+                    text-align: center; 
+                    border-radius: 0;
+                }}
+                .header h1 {{
+                    margin: 0;
+                    font-size: 32px;
+                    font-weight: bold;
+                }}
+                .header p {{
+                    margin: 10px 0 0 0;
+                    font-size: 16px;
+                    opacity: 0.95;
+                }}
+                .content {{ 
+                    background: #ffffff; 
+                    padding: 40px 30px; 
+                }}
+                .content h2 {{
+                    color: #333;
+                    font-size: 24px;
+                    margin: 0 0 20px 0;
+                    font-weight: 600;
+                }}
+                .content p {{
+                    color: #555;
+                    font-size: 16px;
+                    margin: 15px 0;
+                    line-height: 1.7;
+                }}
+                .features {{
+                    background: #f8f9fa;
+                    border-left: 4px solid #667eea;
+                    padding: 20px;
+                    margin: 25px 0;
+                    border-radius: 4px;
+                }}
+                .features ul {{
+                    margin: 0;
+                    padding-left: 25px;
+                }}
+                .features li {{
+                    color: #555;
+                    font-size: 16px;
+                    margin: 10px 0;
+                    line-height: 1.6;
+                }}
+                .button-container {{
+                    text-align: center;
+                    margin: 30px 0;
+                }}
+                .button {{ 
+                    display: inline-block; 
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    color: white; 
+                    padding: 15px 40px; 
+                    text-decoration: none; 
+                    border-radius: 8px; 
+                    font-weight: 600;
+                    font-size: 16px;
+                    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+                    transition: transform 0.2s;
+                }}
+                .button:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+                }}
+                .closing {{
+                    margin-top: 30px;
+                    padding-top: 25px;
+                    border-top: 1px solid #e0e0e0;
+                }}
+                .footer {{ 
+                    text-align: center; 
+                    padding: 30px;
+                    background-color: #f8f9fa;
+                    color: #666; 
+                    font-size: 12px; 
+                }}
+                .footer p {{
+                    margin: 5px 0;
+                    color: #999;
+                }}
+                .emoji {{
+                    font-size: 24px;
+                    vertical-align: middle;
+                }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>Ereft</h1>
+                    <h1>🏠 Ereft</h1>
                     <p>Ethiopia's Premier Real Estate Platform</p>
                 </div>
                 <div class="content">
-                    <h2>{greeting}</h2>
-                    <p>{message_intro}</p>
-                    <p>You can now:</p>
-                    <ul>
-                        <li>Browse and search properties across Ethiopia</li>
-                        <li>Save your favorite listings</li>
-                        <li>List your own properties</li>
-                        <li>Connect with property owners and agents</li>
-                    </ul>
-                    <a href="https://www.ereft.com" class="button">Visit Ereft</a>
-                    <p>If you have any questions, feel free to reach out to us.</p>
-                    <p>Best regards,<br>The Ereft Team</p>
+                    <h2>🎉 Welcome, {user_name}!</h2>
+                    <p>We're <strong>thrilled</strong> to have you join the Ereft community! 🎊</p>
+                    <p>Your account is all set up and ready to go. You can now start exploring amazing properties across Ethiopia!</p>
+                    
+                    <div class="features">
+                        <p style="margin-top: 0; font-weight: 600; color: #667eea;">✨ <strong>Get Started:</strong></p>
+                        <ul>
+                            <li>🔍 <strong>Browse & Search</strong> thousands of properties across Ethiopia</li>
+                            <li>❤️ <strong>Save Favorites</strong> and create your dream home wishlist</li>
+                            <li>🏘️ <strong>List Properties</strong> and connect with serious buyers and renters</li>
+                            <li>🗺️ <strong>Explore on Map</strong> to find properties in your preferred locations</li>
+                            <li>💬 <strong>Contact Agents</strong> directly and get instant responses</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="button-container">
+                        <a href="https://www.ereft.com" class="button">🚀 Start Exploring Properties</a>
+                    </div>
+                    
+                    <p>Whether you're looking to buy, rent, or sell, Ereft makes the entire process smooth and enjoyable. 💫</p>
+                    
+                    <div class="closing">
+                        <p>If you have any questions or need help, we're here for you! Just reply to this email.</p>
+                        <p><strong>Happy house hunting! 🏡✨</strong></p>
+                        <p style="margin-top: 20px;">
+                            Best regards,<br>
+                            <strong>The Ereft Team</strong> 💙
+                        </p>
+                    </div>
                 </div>
                 <div class="footer">
-                    <p>This email was sent from melaku.garsamo@gmail.com</p>
-                    <p>&copy; 2024 Ereft. All rights reserved.</p>
+                    <p>This email was sent to {recipient_email}</p>
+                    <p>&copy; {datetime.now().year} Ereft. All rights reserved.</p>
+                    <p>Ethiopia's trusted real estate platform</p>
                 </div>
             </div>
         </body>
         </html>
         """
         
+        # Plain text version
         plain_message = f"""
-        {greeting}
-        
-        {message_intro}
-        
-        You can now:
-        - Browse and search properties across Ethiopia
-        - Save your favorite listings
-        - List your own properties
-        - Connect with property owners and agents
-        
-        Visit us at: https://www.ereft.com
-        
-        If you have any questions, feel free to reach out to us.
-        
-        Best regards,
-        The Ereft Team
-        
-        This email was sent from melaku.garsamo@gmail.com
+🎉 Welcome to Ereft, {user_name}! 🚀
+
+We're thrilled to have you join the Ereft community!
+
+Your account is all set up and ready to go. You can now start exploring amazing properties across Ethiopia!
+
+✨ Get Started:
+• 🔍 Browse & Search thousands of properties across Ethiopia
+• ❤️ Save Favorites and create your dream home wishlist
+• 🏘️ List Properties and connect with serious buyers and renters
+• 🗺️ Explore on Map to find properties in your preferred locations
+• 💬 Contact Agents directly and get instant responses
+
+🚀 Start exploring: https://www.ereft.com
+
+Whether you're looking to buy, rent, or sell, Ereft makes the entire process smooth and enjoyable.
+
+If you have any questions or need help, we're here for you!
+
+Happy house hunting! 🏡✨
+
+Best regards,
+The Ereft Team 💙
+
+---
+This email was sent to {recipient_email}
+© {datetime.now().year} Ereft. All rights reserved.
         """
         
+        # Get FROM email from settings
+        from_email = settings.DEFAULT_FROM_EMAIL
+        
+        # Send email
         send_mail(
             subject=subject,
             message=plain_message,
-            from_email='melaku.garsamo@gmail.com',  # Send from specified email
-            recipient_list=[user.email],
+            from_email=from_email,
+            recipient_list=[recipient_email],
             html_message=html_content,
             fail_silently=False,
         )
         
-        print(f"✅ Welcome email sent to {user.email}")
+        print(f"✅ Welcome email sent to {recipient_email} (from: {from_email})")
         return True
     except Exception as e:
-        print(f"❌ Failed to send welcome email to {user.email}: {str(e)}")
+        print(f"❌ Failed to send welcome email to {recipient_email if 'recipient_email' in locals() else user.email}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def compress_image(image_field, max_size=(800, 600), quality=85):
