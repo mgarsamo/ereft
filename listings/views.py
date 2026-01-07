@@ -801,8 +801,6 @@ def property_stats(request):
     })
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
-@api_view(['POST'])
 @permission_classes([])  # Allow anonymous views
 def track_property_view(request, property_id):
     """
