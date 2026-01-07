@@ -251,6 +251,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """
         Delete a property - bulletproof with payments table handling
+        Uses raw SQL if Django ORM fails due to missing payments table
         """
         try:
             # Get the property
@@ -267,86 +268,106 @@ class PropertyViewSet(viewsets.ModelViewSet):
             # Store info for logging
             property_id = str(instance.id)
             property_title = instance.title
+            property_uuid = instance.id  # Keep UUID for raw SQL fallback
             
             print(f"🗑️ Deleting property: {property_title} (ID: {property_id})")
             
-            # Handle payments table gracefully if it doesn't exist
+            # Check if payments table exists before attempting Django ORM deletion
+            from django.db import connection
+            payments_table_exists = False
+            
             try:
-                # Check if payments app is installed and table exists
-                from django.db import connection
-                from django.apps import apps
-                
-                # Try to get Payment model if payments app is installed
-                payment_model = None
-                try:
-                    payment_model = apps.get_model('payments', 'Payment')
-                    # Check if table exists
-                    with connection.cursor() as cursor:
+                with connection.cursor() as cursor:
+                    # Check for payments table (works for both SQLite and PostgreSQL)
+                    if 'sqlite' in connection.vendor:
                         cursor.execute("""
                             SELECT name FROM sqlite_master 
                             WHERE type='table' AND name='payments_payment'
-                            UNION ALL
+                        """)
+                    else:  # PostgreSQL
+                        cursor.execute("""
                             SELECT tablename FROM pg_tables 
                             WHERE schemaname='public' AND tablename='payments_payment'
                         """)
-                        table_exists = cursor.fetchone() is not None
-                        
-                        if table_exists:
-                            # Payments table exists - handle payments with SET_NULL
-                            payments = payment_model.objects.filter(property=instance)
-                            if payments.exists():
-                                payments.update(property=None)
-                                print(f"   Updated {payments.count()} payment records (set property to NULL)")
-                except (LookupError, Exception) as pay_error:
-                    # Payments app/model doesn't exist or table doesn't exist - skip
-                    print(f"   Payments table not found or not accessible - skipping payments update")
+                    payments_table_exists = cursor.fetchone() is not None
+            except Exception:
+                payments_table_exists = False
+            
+            # Try Django ORM deletion first (only if payments table exists or we're confident)
+            try:
+                if payments_table_exists:
+                    # Payments table exists - try to update payments first
+                    try:
+                        from django.apps import apps
+                        payment_model = apps.get_model('payments', 'Payment')
+                        payments = payment_model.objects.filter(property=instance)
+                        if payments.exists():
+                            payments.update(property=None)
+                            print(f"   Updated {payments.count()} payment records (set property to NULL)")
+                    except Exception:
+                        pass  # Skip if payments model not accessible
+                
+                # Delete related objects manually
+                try:
+                    instance.images.all().delete()
+                except Exception:
                     pass
+                
+                try:
+                    Favorite.objects.filter(property=instance).delete()
+                except Exception:
+                    pass
+                
+                try:
+                    PropertyView.objects.filter(property=instance).delete()
+                except Exception:
+                    pass
+                
+                try:
+                    Contact.objects.filter(property=instance).delete()
+                except Exception:
+                    pass
+                
+                try:
+                    PropertyReview.objects.filter(property=instance).delete()
+                except Exception:
+                    pass
+                
+                # Try Django ORM deletion
+                instance.delete()
+                print(f"✅ Property deleted via Django ORM: {property_title}")
+                
+            except Exception as orm_error:
+                error_str = str(orm_error)
+                print(f"⚠️ Django ORM deletion failed: {error_str}")
+                
+                # If it's a payments table error, use raw SQL
+                if 'payments_payment' in error_str or 'no such table' in error_str.lower() or not payments_table_exists:
+                    print(f"   Using raw SQL deletion (payments table missing)...")
                     
-            except Exception as check_error:
-                # Silently continue if we can't check payments
-                print(f"   Could not check payments table: {check_error}")
-                pass
-            
-            # Delete related objects manually to avoid FK constraint issues
-            try:
-                # Delete PropertyImages
-                instance.images.all().delete()
-                print(f"   Deleted property images")
-            except Exception as img_error:
-                print(f"   Could not delete images: {img_error}")
-            
-            try:
-                # Delete Favorites
-                Favorite.objects.filter(property=instance).delete()
-                print(f"   Deleted favorites")
-            except Exception as fav_error:
-                print(f"   Could not delete favorites: {fav_error}")
-            
-            try:
-                # Delete PropertyViews
-                PropertyView.objects.filter(property=instance).delete()
-                print(f"   Deleted property views")
-            except Exception as view_error:
-                print(f"   Could not delete views: {view_error}")
-            
-            try:
-                # Delete Contacts
-                Contact.objects.filter(property=instance).delete()
-                print(f"   Deleted contacts")
-            except Exception as contact_error:
-                print(f"   Could not delete contacts: {contact_error}")
-            
-            try:
-                # Delete Reviews
-                PropertyReview.objects.filter(property=instance).delete()
-                print(f"   Deleted reviews")
-            except Exception as review_error:
-                print(f"   Could not delete reviews: {review_error}")
-            
-            # Finally delete the property itself
-            instance.delete()
-            
-            print(f"✅ Property deleted successfully: {property_title}")
+                    # Use raw SQL to delete directly from database
+                    with connection.cursor() as cursor:
+                        # Delete related objects first via raw SQL
+                        try:
+                            cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [property_uuid])
+                            cursor.execute("DELETE FROM listings_favorite WHERE property_id = %s", [property_uuid])
+                            cursor.execute("DELETE FROM listings_propertyview WHERE property_id = %s", [property_uuid])
+                            cursor.execute("DELETE FROM listings_contact WHERE property_id = %s", [property_uuid])
+                            cursor.execute("DELETE FROM listings_propertyreview WHERE property_id = %s", [property_uuid])
+                            print(f"   Deleted related objects via raw SQL")
+                        except Exception as rel_error:
+                            print(f"   Some related objects couldn't be deleted: {rel_error}")
+                        
+                        # Delete the property itself
+                        if 'sqlite' in connection.vendor:
+                            cursor.execute("DELETE FROM listings_property WHERE id = ?", [property_uuid])
+                        else:  # PostgreSQL
+                            cursor.execute("DELETE FROM listings_property WHERE id = %s", [property_uuid])
+                        
+                        print(f"✅ Property deleted via raw SQL: {property_title}")
+                else:
+                    # Re-raise if it's not a payments table error
+                    raise orm_error
             
             # Clear cache
             try:
@@ -363,22 +384,21 @@ class PropertyViewSet(viewsets.ModelViewSet):
             import traceback
             traceback.print_exc()
             
-            # Check if it's the payments table error
-            error_str = str(e)
-            if 'payments_payment' in error_str or 'no such table' in error_str.lower():
-                # Try to delete without payments table
-                try:
-                    instance = self.get_object()
-                    # Use raw SQL to delete if Django ORM fails
-                    from django.db import connection
+            # Final fallback - always try raw SQL
+            try:
+                from django.db import connection
+                property_uuid = str(instance.id) if 'instance' in locals() else None
+                if property_uuid:
                     with connection.cursor() as cursor:
-                        cursor.execute("DELETE FROM listings_property WHERE id = %s", [str(instance.id)])
-                    
+                        if 'sqlite' in connection.vendor:
+                            cursor.execute("DELETE FROM listings_property WHERE id = ?", [property_uuid])
+                        else:
+                            cursor.execute("DELETE FROM listings_property WHERE id = %s", [property_uuid])
                     cache.clear()
-                    print(f"✅ Property deleted via raw SQL: {instance.title}")
+                    print(f"✅ Property deleted via final fallback SQL: {property_title if 'property_title' in locals() else 'Unknown'}")
                     return Response(status=status.HTTP_204_NO_CONTENT)
-                except Exception as fallback_error:
-                    print(f"❌ Fallback deletion also failed: {fallback_error}")
+            except Exception as final_error:
+                print(f"❌ Final fallback also failed: {final_error}")
             
             return Response({'detail': f'Failed to delete property: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
