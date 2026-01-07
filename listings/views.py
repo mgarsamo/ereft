@@ -802,24 +802,49 @@ def property_stats(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@api_view(['POST'])
+@permission_classes([])  # Allow anonymous views
 def track_property_view(request, property_id):
     """
-    Track property view
+    Track property view - works for both authenticated and anonymous users
     """
-    property_obj = get_object_or_404(Property, id=property_id)
-    
-    PropertyView.objects.create(
-        property=property_obj,
-        user=request.user,
-        ip_address=request.META.get('REMOTE_ADDR'),
-        user_agent=request.META.get('HTTP_USER_AGENT', '')
-    )
-    
-    # Increment view count
-    property_obj.views_count += 1
-    property_obj.save()
-    
-    return Response({'status': 'view tracked'})
+    try:
+        property_obj = get_object_or_404(Property, id=property_id)
+        
+        # Get user if authenticated, otherwise None (for anonymous tracking)
+        user = request.user if request.user.is_authenticated else None
+        
+        # Create view record
+        PropertyView.objects.create(
+            property=property_obj,
+            user=user,  # Can be None for anonymous views
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+            user_agent=(request.META.get('HTTP_USER_AGENT', '') or '')[:200]  # Limit length
+        )
+        
+        # Increment view count atomically
+        from django.db.models import F
+        Property.objects.filter(id=property_obj.id).update(views_count=F('views_count') + 1)
+        
+        # Refresh property to get updated count
+        property_obj.refresh_from_db()
+        
+        # Clear cache to ensure view count updates are visible
+        try:
+            cache.clear()
+        except:
+            pass
+        
+        print(f"👁️ View tracked for property {property_obj.id} (User: {user.username if user else 'Anonymous'}) - Total views: {property_obj.views_count}")
+        
+        return Response({'status': 'view tracked', 'views_count': property_obj.views_count})
+        
+    except Exception as e:
+        print(f"❌ Error tracking view: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Still return success - tracking is non-blocking
+        return Response({'status': 'view tracked'}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
