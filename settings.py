@@ -307,7 +307,8 @@ DJOSER = {
 # ------------------------------------------------------
 # Email Configuration for Verification (SendGrid)
 # ------------------------------------------------------
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# Use custom email backend for Python 3.13 compatibility
+EMAIL_BACKEND = 'listings.email_backend.CompatibleSMTPEmailBackend'
 # Check for SENDGRID_ prefixed vars first, then fall back to EMAIL_ vars
 EMAIL_HOST = config('SENDGRID_EMAIL_HOST', default=config('EMAIL_HOST', default='smtp.sendgrid.net'))
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
