@@ -13,8 +13,15 @@ from .models import Property, UserProfile
 from datetime import timedelta
 
 def is_admin_user(user):
-    """Check if user is admin (superuser or staff)"""
-    return user.is_authenticated and (user.is_superuser or user.is_staff)
+    """Check if user is admin (superuser, staff, or melaku.garsamo@gmail.com)"""
+    if not user.is_authenticated:
+        return False
+    # Simple admin check: superuser, staff, or specific admin email
+    if user.is_superuser or user.is_staff:
+        return True
+    if hasattr(user, 'email') and user.email == 'melaku.garsamo@gmail.com':
+        return True
+    return False
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
