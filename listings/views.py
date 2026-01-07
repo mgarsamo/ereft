@@ -1459,11 +1459,7 @@ def process_google_oauth_code(code, request):
             # Send welcome email for new Google OAuth users (only once)
             try:
                 from .utils import send_welcome_email
-                # Send to user's email
                 send_welcome_email(user, is_new_user=True)
-                # Also send test email to admin for verification
-                if email != 'melaku.garsamo@gmail.com':
-                    send_welcome_email(user, is_new_user=True, test_email='melaku.garsamo@gmail.com')
                 print(f"🔐 Google OAuth: Welcome email sent to {email} for new user")
             except Exception as e:
                 print(f"🔐 Google OAuth: Failed to send welcome email: {str(e)}")
@@ -1772,11 +1768,7 @@ def custom_register(request):
         # Send welcome email for new users (only once)
         try:
             from .utils import send_welcome_email
-            # Send to user's email
             send_welcome_email(user, is_new_user=True)
-            # Also send test email to admin for verification
-            if user.email != 'melaku.garsamo@gmail.com':
-                send_welcome_email(user, is_new_user=True, test_email='melaku.garsamo@gmail.com')
             print(f"✅ Registration: Welcome email sent to {user.email}")
         except Exception as e:
             print(f"⚠️ Registration: Failed to send welcome email: {str(e)}")
