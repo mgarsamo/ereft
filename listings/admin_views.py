@@ -173,8 +173,8 @@ def admin_all_properties(request):
             'is_published': prop.is_published,
             'is_featured': prop.is_featured,
             'views_count': prop.views_count,
-            'created_at': prop.created_at,
-            'updated_at': prop.updated_at,
+            'created_at': prop.created_at.isoformat() if prop.created_at else None,
+            'updated_at': prop.updated_at.isoformat() if prop.updated_at else None,
             'owner': {
                 'id': prop.owner.id,
                 'username': prop.owner.username,
@@ -229,7 +229,7 @@ def admin_user_listings(request, user_id):
             'status': prop.status,
             'is_active': prop.is_active,
             'is_published': prop.is_published,
-            'created_at': prop.created_at,
+            'created_at': prop.created_at.isoformat() if prop.created_at else None,
         })
     
     return Response({
