@@ -35,6 +35,7 @@ from .models import (
     Property, PropertyImage, Favorite, PropertyView, SearchHistory,
     Contact, Neighborhood, PropertyReview, UserProfile
 )
+# Admin views are imported in urls.py
 from .serializers import (
     PropertySerializer, PropertyListSerializer, PropertyDetailSerializer,
     PropertyCreateSerializer, PropertySearchSerializer, FavoriteSerializer,

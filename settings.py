@@ -227,6 +227,17 @@ REST_FRAMEWORK = {
 }
 
 # ------------------------------------------------------
+# Cache Configuration
+# ------------------------------------------------------
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'ereft-locmem-cache',
+        'TIMEOUT': 60 * 10,  # 10 minutes default
+    }
+}
+
+# ------------------------------------------------------
 # JWT Configuration - Production Ready
 # ------------------------------------------------------
 from datetime import timedelta

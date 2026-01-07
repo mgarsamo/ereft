@@ -8,6 +8,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 from django.contrib.auth.views import LogoutView
 from . import views
+from . import admin_views
 from .auth_views import (
     CustomTokenObtainPairView, 
     CustomTokenRefreshView,
@@ -77,4 +78,10 @@ urlpatterns = [
     
     # User Profile
     path('profile/', views.user_profile, name='user-profile'),
+    
+    # Admin Dashboard Endpoints
+    path('admin/dashboard/stats/', admin_views.admin_dashboard_stats, name='admin-dashboard-stats'),
+    path('admin/users/', admin_views.admin_all_users, name='admin-all-users'),
+    path('admin/properties/', admin_views.admin_all_properties, name='admin-all-properties'),
+    path('admin/users/<int:user_id>/listings/', admin_views.admin_user_listings, name='admin-user-listings'),
 ]
