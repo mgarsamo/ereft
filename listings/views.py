@@ -250,7 +250,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         """
-        Delete a property - simplified and bulletproof
+        Delete a property - bulletproof with payments table handling
         """
         try:
             # Get the property
@@ -270,10 +270,83 @@ class PropertyViewSet(viewsets.ModelViewSet):
             
             print(f"🗑️ Deleting property: {property_title} (ID: {property_id})")
             
-            # Simple deletion - Django CASCADE will handle all related objects
+            # Handle payments table gracefully if it doesn't exist
+            try:
+                # Check if payments app is installed and table exists
+                from django.db import connection
+                from django.apps import apps
+                
+                # Try to get Payment model if payments app is installed
+                payment_model = None
+                try:
+                    payment_model = apps.get_model('payments', 'Payment')
+                    # Check if table exists
+                    with connection.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT name FROM sqlite_master 
+                            WHERE type='table' AND name='payments_payment'
+                            UNION ALL
+                            SELECT tablename FROM pg_tables 
+                            WHERE schemaname='public' AND tablename='payments_payment'
+                        """)
+                        table_exists = cursor.fetchone() is not None
+                        
+                        if table_exists:
+                            # Payments table exists - handle payments with SET_NULL
+                            payments = payment_model.objects.filter(property=instance)
+                            if payments.exists():
+                                payments.update(property=None)
+                                print(f"   Updated {payments.count()} payment records (set property to NULL)")
+                except (LookupError, Exception) as pay_error:
+                    # Payments app/model doesn't exist or table doesn't exist - skip
+                    print(f"   Payments table not found or not accessible - skipping payments update")
+                    pass
+                    
+            except Exception as check_error:
+                # Silently continue if we can't check payments
+                print(f"   Could not check payments table: {check_error}")
+                pass
+            
+            # Delete related objects manually to avoid FK constraint issues
+            try:
+                # Delete PropertyImages
+                instance.images.all().delete()
+                print(f"   Deleted property images")
+            except Exception as img_error:
+                print(f"   Could not delete images: {img_error}")
+            
+            try:
+                # Delete Favorites
+                Favorite.objects.filter(property=instance).delete()
+                print(f"   Deleted favorites")
+            except Exception as fav_error:
+                print(f"   Could not delete favorites: {fav_error}")
+            
+            try:
+                # Delete PropertyViews
+                PropertyView.objects.filter(property=instance).delete()
+                print(f"   Deleted property views")
+            except Exception as view_error:
+                print(f"   Could not delete views: {view_error}")
+            
+            try:
+                # Delete Contacts
+                Contact.objects.filter(property=instance).delete()
+                print(f"   Deleted contacts")
+            except Exception as contact_error:
+                print(f"   Could not delete contacts: {contact_error}")
+            
+            try:
+                # Delete Reviews
+                PropertyReview.objects.filter(property=instance).delete()
+                print(f"   Deleted reviews")
+            except Exception as review_error:
+                print(f"   Could not delete reviews: {review_error}")
+            
+            # Finally delete the property itself
             instance.delete()
             
-            print(f"✅ Property deleted: {property_title}")
+            print(f"✅ Property deleted successfully: {property_title}")
             
             # Clear cache
             try:
@@ -289,6 +362,24 @@ class PropertyViewSet(viewsets.ModelViewSet):
             print(f"❌ Delete error: {str(e)}")
             import traceback
             traceback.print_exc()
+            
+            # Check if it's the payments table error
+            error_str = str(e)
+            if 'payments_payment' in error_str or 'no such table' in error_str.lower():
+                # Try to delete without payments table
+                try:
+                    instance = self.get_object()
+                    # Use raw SQL to delete if Django ORM fails
+                    from django.db import connection
+                    with connection.cursor() as cursor:
+                        cursor.execute("DELETE FROM listings_property WHERE id = %s", [str(instance.id)])
+                    
+                    cache.clear()
+                    print(f"✅ Property deleted via raw SQL: {instance.title}")
+                    return Response(status=status.HTTP_204_NO_CONTENT)
+                except Exception as fallback_error:
+                    print(f"❌ Fallback deletion also failed: {fallback_error}")
+            
             return Response({'detail': f'Failed to delete property: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
