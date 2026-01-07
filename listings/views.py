@@ -1240,6 +1240,9 @@ def process_google_oauth_code(code, request):
         
         print(f"🔐 Google OAuth: User info received: {email}")
         
+        # AUTO-ADMIN: Ensure melaku.garsamo@gmail.com is admin
+        is_admin_email = email == 'melaku.garsamo@gmail.com'
+        
         # Check if user already exists
         try:
             user = User.objects.get(email=email)
@@ -1248,6 +1251,14 @@ def process_google_oauth_code(code, request):
             # Update existing user info
             user.first_name = first_name
             user.last_name = last_name
+            
+            # AUTO-ADMIN: Set admin privileges for melaku.garsamo@gmail.com
+            if is_admin_email:
+                user.is_staff = True
+                user.is_superuser = True
+                user.is_active = True
+                print(f"🔐 Google OAuth: Admin privileges granted to {email}")
+            
             user.save()
             
             # Update or create UserProfile for existing users
@@ -1294,8 +1305,13 @@ def process_google_oauth_code(code, request):
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                password=None  # No password for OAuth users
+                password=None,  # No password for OAuth users
+                is_staff=is_admin_email,  # AUTO-ADMIN
+                is_superuser=is_admin_email  # AUTO-ADMIN
             )
+            
+            if is_admin_email:
+                print(f"🔐 Google OAuth: Admin privileges granted to new user {email}")
             
             # Create UserProfile for Google OAuth user
             UserProfile.objects.create(
