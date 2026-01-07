@@ -312,11 +312,17 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = config('SENDGRID_EMAIL_HOST', default=config('EMAIL_HOST', default='smtp.sendgrid.net'))
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)  # SendGrid uses TLS, not SSL
 EMAIL_HOST_USER = config('SENDGRID_EMAIL_USER', default=config('EMAIL_USER', default=config('EMAIL_HOST_USER', default='apikey')))
 EMAIL_HOST_PASSWORD = config('SENDGRID_EMAIL_PASS', default=config('EMAIL_PASS', default=config('EMAIL_HOST_PASSWORD', default='')))
 # Parse EMAIL_FROM if it contains name, otherwise use as-is
 email_from_raw = config('SENDGRID_EMAIL_FROM', default=config('EMAIL_FROM', default=config('DEFAULT_FROM_EMAIL', default='Ereft Admin <admin@ereft.com>')))
 DEFAULT_FROM_EMAIL = email_from_raw.strip('"').strip("'")  # Remove quotes if present
+
+# Fix for Python 3.13 compatibility - disable SSL keyfile/certfile
+# These cause errors with Python 3.13's smtplib.starttls()
+EMAIL_SSL_CERTFILE = None
+EMAIL_SSL_KEYFILE = None
 
 # ------------------------------------------------------
 # Twilio Configuration for SMS Verification
