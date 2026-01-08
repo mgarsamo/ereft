@@ -1256,25 +1256,27 @@ def request_password_reset(request):
         # Handle duplicate emails by getting the first match
         user = User.objects.filter(email=email).first()
         if user and user.is_active:
-                # Send REAL password reset email
-                try:
-                    from .utils import send_password_reset_email
-                    if send_password_reset_email(user, request):
-                        return Response({
-                            'message': 'Password reset link has been sent to your email address.'
-                        })
-                    else:
-                        return Response({
-                            'error': 'Failed to send password reset email. Please try again.'
-                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                except Exception as e:
-                    print(f"🔐 Password reset email failed: {e}")
+            # Send REAL password reset email
+            try:
+                from .utils import send_password_reset_email
+                if send_password_reset_email(user, request):
                     return Response({
-                        'error': 'Password reset email failed. Please try again.'
+                        'message': 'Password reset link has been sent to your email address.'
+                    })
+                else:
+                    return Response({
+                        'error': 'Failed to send password reset email. Please try again.'
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except User.DoesNotExist:
-            # Don't reveal if user exists or not
-            pass
+            except Exception as e:
+                print(f"🔐 Password reset email failed: {e}")
+                return Response({
+                    'error': 'Password reset email failed. Please try again.'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Don't reveal if user exists or not (security best practice)
+        return Response({
+            'message': 'If an account with this email exists, a password reset link has been sent.'
+        })
         
         return Response({
             'message': 'If an account with this email exists, you will receive a password reset link.'
