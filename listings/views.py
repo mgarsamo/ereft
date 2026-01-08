@@ -237,11 +237,37 @@ class PropertyViewSet(viewsets.ModelViewSet):
         print(f"🔍 PropertyViewSet.create: Verifying images for property {property_obj.id}")
         print(f"   - Database has {len(db_images)} PropertyImage objects")
         
+        # CRITICAL: If no images in database but we have validated URLs, create them NOW as fallback
+        if not db_images and validated_image_urls:
+            print(f"⚠️ CRITICAL: No images in database but we have {len(validated_image_urls)} validated URLs!")
+            print(f"   Creating PropertyImage objects as fallback...")
+            for idx, url in enumerate(validated_image_urls[:4], 1):
+                try:
+                    prop_image = PropertyImage.objects.create(
+                        property=property_obj,
+                        image=url,
+                        is_primary=(idx == 1),
+                        order=idx
+                    )
+                    print(f"   ✅ Fallback PropertyImage {idx} created: ID={prop_image.id}, URL={url[:80]}...")
+                    db_images.append(prop_image)
+                except Exception as e:
+                    print(f"   ❌ Failed to create fallback PropertyImage {idx}: {e}")
+            
+            # Force commit
+            from django.db import transaction
+            transaction.commit()
+            # Reload images
+            db_images = list(PropertyImage.objects.filter(property=property_obj).order_by('order', 'created_at'))
+        
         if db_images:
             for idx, img in enumerate(db_images, 1):
                 print(f"   DB Image {idx}: ID={img.id}, URL={img.image[:80] if img.image else 'NO URL'}..., primary={img.is_primary}, order={img.order}")
         else:
             print(f"   ❌ NO IMAGES IN DATABASE for property {property_obj.id}!")
+            if validated_image_urls:
+                print(f"   ⚠️ WARNING: We had {len(validated_image_urls)} validated URLs but no images in database!")
+                print(f"   This indicates a critical issue with PropertyImage creation!")
 
         # Serialize property with images
         detail_serializer = PropertyDetailSerializer(
