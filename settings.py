@@ -145,8 +145,9 @@ TEMPLATES = [
 # ------------------------------------------------------
 # Database Configuration
 # ------------------------------------------------------
-# Use DATABASE_URL from environment (Render) or fallback to SQLite
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# Use DATABASE_URL or POSTGRE_DATABASE_URL from environment (Render) or fallback to SQLite
+# Priority: DATABASE_URL > POSTGRE_DATABASE_URL > SQLite
+DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRE_DATABASE_URL')
 
 if DATABASE_URL:
     # Production: Use DATABASE_URL from Render
