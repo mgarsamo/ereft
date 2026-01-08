@@ -317,18 +317,192 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 print(f"❌ ERROR: 'images' is not a list! Type: {type(images_check)}, removing from data")
                 data.pop('images', None)
         
-        # CRITICAL: One last check - verify data['images'] is a list of strings before serializer
+        # CRITICAL: ABSOLUTE FINAL CHECK - verify data['images'] is a list of strings before serializer
+        # This is the LAST chance to fix it before serializer validation
         if 'images' in data:
+            print(f"🔍 PropertyViewSet.create: FINAL CHECK before serializer")
+            print(f"   data['images'] type: {type(data['images'])}")
+            print(f"   data['images'] value: {data['images']}")
+            
             if not isinstance(data['images'], list):
                 print(f"❌ CRITICAL: data['images'] is not a list! Type: {type(data['images'])}, removing")
                 data.pop('images', None)
-            elif not all(isinstance(item, str) for item in data['images']):
-                print(f"❌ CRITICAL: Not all items in data['images'] are strings!")
-                data['images'] = [str(item) for item in data['images'] if item]
-                print(f"✅ Fixed: Converted all items to strings, {len(data['images'])} items remain")
+            else:
+                print(f"   data['images'] is a list with {len(data['images'])} items")
+                # Check each item
+                for idx, item in enumerate(data['images']):
+                    print(f"   Item {idx}: type={type(item)}, value={str(item)[:100] if item else 'None'}...")
+                    
+                # Convert ALL items to strings - no exceptions
+                cleaned_list = []
+                for idx, item in enumerate(data['images']):
+                    if item is None:
+                        print(f"   ⚠️ Item {idx}: None, skipping")
+                        continue
+                    elif isinstance(item, str):
+                        cleaned_item = item.strip()
+                        if cleaned_item:
+                            cleaned_list.append(cleaned_item)
+                            print(f"   ✅ Item {idx}: String '{cleaned_item[:50]}...'")
+                        else:
+                            print(f"   ⚠️ Item {idx}: Empty string, skipping")
+                    elif hasattr(item, 'read'):  # File-like
+                        print(f"   ❌ Item {idx}: File-like object, skipping")
+                        continue
+                    else:
+                        # Try to convert to string
+                        try:
+                            cleaned_item = str(item).strip()
+                            if cleaned_item and cleaned_item not in ['None', 'null', '']:
+                                cleaned_list.append(cleaned_item)
+                                print(f"   ✅ Item {idx}: Converted to string '{cleaned_item[:50]}...'")
+                            else:
+                                print(f"   ⚠️ Item {idx}: Empty after conversion, skipping")
+                        except Exception as e:
+                            print(f"   ❌ Item {idx}: Failed to convert to string: {e}, skipping")
+                            continue
+                
+                # Final verification - ensure all are strings
+                final_clean_list = []
+                for idx, item in enumerate(cleaned_list):
+                    if isinstance(item, str) and len(item.strip()) > 5:
+                        final_clean_list.append(item.strip())
+                    else:
+                        print(f"   ⚠️ Filtered out invalid item {idx}: {item}")
+                
+                if final_clean_list:
+                    data['images'] = final_clean_list
+                    print(f"✅ FINAL: data['images'] has {len(final_clean_list)} valid string items")
+                    for idx, item in enumerate(final_clean_list):
+                        print(f"   Final item {idx}: '{item[:50]}...' (type: {type(item).__name__}, len: {len(item)})")
+                else:
+                    print(f"⚠️ FINAL: No valid items after cleaning, removing 'images' from data")
+                    data.pop('images', None)
+        else:
+            print(f"ℹ️ PropertyViewSet.create: No 'images' key in data before serializer")
+        
+        # CRITICAL: Log exactly what we're passing to serializer
+        print(f"🔍 PropertyViewSet.create: Passing to serializer:")
+        print(f"   data keys: {list(data.keys())}")
+        if 'images' in data:
+            print(f"   data['images']: {data['images']}")
+            print(f"   data['images'] type: {type(data['images'])}")
+            if isinstance(data['images'], list):
+                print(f"   data['images'] length: {len(data['images'])}")
+                for idx, item in enumerate(data['images']):
+                    print(f"   Serializer item {idx}: type={type(item).__name__}, value='{str(item)[:50] if item else 'None'}...'")
+        else:
+            print(f"   data['images']: NOT PRESENT")
+        
+        # Create serializer with cleaned data
+        # CRITICAL: Before creating serializer, ensure images field is 100% correct
+        # The serializer expects images as ListField(child=CharField()), so it MUST be a list of strings
+        if 'images' in data:
+            # Make absolutely sure it's a list
+            if not isinstance(data['images'], list):
+                print(f"❌ CRITICAL: data['images'] is NOT a list before serializer! Type: {type(data['images'])}, Value: {data['images']}")
+                # Try to convert to list
+                if isinstance(data['images'], (tuple, set)):
+                    data['images'] = list(data['images'])
+                elif data['images'] is not None:
+                    data['images'] = [str(data['images'])]
+                else:
+                    data.pop('images', None)
+            
+            # Make absolutely sure EVERY item in the list is a string
+            if isinstance(data['images'], list):
+                final_images_list = []
+                for idx, item in enumerate(data['images']):
+                    if item is None:
+                        continue
+                    elif isinstance(item, str):
+                        item_str = item.strip()
+                        if item_str and len(item_str) > 5:
+                            final_images_list.append(item_str)
+                        else:
+                            print(f"   ⚠️ Item {idx} too short, skipping: {item_str}")
+                    elif hasattr(item, 'read'):
+                        print(f"   ❌ Item {idx} is File object, skipping")
+                        continue
+                    else:
+                        # Force convert to string
+                        try:
+                            item_str = str(item).strip()
+                            if item_str and len(item_str) > 5 and item_str not in ['None', 'null', '']:
+                                final_images_list.append(item_str)
+                                print(f"   ✅ Item {idx} converted to string: {item_str[:50]}...")
+                            else:
+                                print(f"   ⚠️ Item {idx} invalid after conversion: {item_str}")
+                        except:
+                            print(f"   ❌ Item {idx} cannot be converted to string: {type(item)}")
+                            continue
+                
+                # Update data with cleaned list
+                if final_images_list:
+                    data['images'] = final_images_list
+                    print(f"✅ FINAL CLEANUP: data['images'] = {final_images_list}")
+                    print(f"   All items verified as strings: {all(isinstance(x, str) for x in final_images_list)}")
+                else:
+                    data.pop('images', None)
+                    print(f"⚠️ FINAL CLEANUP: No valid items, removed 'images' from data")
         
         serializer = self.get_serializer(data=data)
-        serializer.is_valid(raise_exception=True)
+        
+        # Validate serializer - catch errors before they're raised
+        print(f"🔍 PropertyViewSet.create: About to validate serializer...")
+        print(f"   Serializer class: {serializer.__class__.__name__}")
+        if 'images' in data:
+            print(f"   data['images'] = {data['images']}")
+            print(f"   data['images'] type = {type(data['images'])}")
+            if isinstance(data['images'], list):
+                for idx, item in enumerate(data['images']):
+                    print(f"   Serializer input item {idx}: type={type(item).__name__}, value='{str(item)[:50]}...'")
+        
+        # Try to validate and catch the error
+        try:
+            is_valid = serializer.is_valid(raise_exception=False)
+            if not is_valid:
+                print(f"❌ SERIALIZER VALIDATION FAILED!")
+                print(f"   Errors: {serializer.errors}")
+                if 'images' in serializer.errors:
+                    print(f"   ❌❌❌ IMAGES VALIDATION ERROR: {serializer.errors['images']}")
+                    if 'images' in data:
+                        print(f"   data['images'] = {data['images']}")
+                        print(f"   data['images'] types = {[type(item).__name__ for item in data['images']]}")
+                        # Try to fix it
+                        if isinstance(data['images'], list):
+                            # Force convert all to strings
+                            fixed_images = []
+                            for idx, item in enumerate(data['images']):
+                                if item is None:
+                                    continue
+                                try:
+                                    item_str = str(item).strip()
+                                    if item_str and len(item_str) > 5:
+                                        fixed_images.append(item_str)
+                                except:
+                                    continue
+                            if fixed_images:
+                                data['images'] = fixed_images
+                                print(f"   🔧 Fixed data['images'] = {fixed_images}")
+                                # Recreate serializer with fixed data
+                                serializer = self.get_serializer(data=data)
+                                serializer.is_valid(raise_exception=True)
+                            else:
+                                # Remove images if we can't fix them
+                                data.pop('images', None)
+                                serializer = self.get_serializer(data=data)
+                                serializer.is_valid(raise_exception=True)
+                else:
+                    # Other validation errors
+                    serializer.is_valid(raise_exception=True)
+            else:
+                print(f"✅ Serializer validation passed!")
+        except Exception as e:
+            print(f"❌ CRITICAL: Exception during serializer validation: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
         property_obj = self.perform_create(serializer)
         property_obj = property_obj or serializer.instance
