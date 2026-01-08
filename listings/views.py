@@ -288,7 +288,9 @@ class PropertyViewSet(viewsets.ModelViewSet):
             if images_data:
                 unique_images = list(dict.fromkeys(images_data))
                 print(f"🏠 PropertyViewSet: Creating {len(unique_images)} PropertyImage objects")
-                print(f"🏠 PropertyViewSet: Image URLs received: {[url[:80] + '...' if len(str(url)) > 80 else str(url) for url in unique_images]}")
+                print(f"🏠 PropertyViewSet: Image URLs received:")
+                for idx, url in enumerate(unique_images, 1):
+                    print(f"   {idx}. {str(url)[:100]}...")
                 
                 # Limit to 4 images maximum
                 images_to_create = unique_images[:4]
@@ -300,16 +302,21 @@ class PropertyViewSet(viewsets.ModelViewSet):
                         if isinstance(image_url, dict):
                             image_url = image_url.get('url') or image_url.get('secure_url') or str(image_url)
                         else:
-                            image_url = str(image_url)
+                            image_url = str(image_url).strip()
                         
-                        if not image_url or image_url == 'None' or image_url == 'null':
+                        if not image_url or image_url == 'None' or image_url == 'null' or image_url == '':
                             print(f"⚠️ PropertyViewSet: Skipping invalid image URL at index {i}: {image_url}")
                             continue
                         
-                        # Verify it's a valid URL
+                        # Verify it's a valid HTTP/HTTPS URL
                         if not (image_url.startswith('http://') or image_url.startswith('https://')):
                             print(f"⚠️ PropertyViewSet: Image URL doesn't start with http/https: {image_url[:50]}")
-                            # Still try to create it - might be a Cloudinary public_id
+                            print(f"   This might be a Cloudinary public_id - will try to create anyway")
+                        
+                        # Validate URL format
+                        if len(image_url) < 10:
+                            print(f"⚠️ PropertyViewSet: Image URL too short, skipping: {image_url}")
+                            continue
                         
                         prop_image = PropertyImage.objects.create(
                             property=property_obj,
@@ -318,12 +325,15 @@ class PropertyViewSet(viewsets.ModelViewSet):
                             order=i
                         )
                         created_count += 1
-                        print(f"✅ PropertyViewSet: PropertyImage {i}/{len(images_to_create)} created")
-                        print(f"   - ID: {prop_image.id}")
-                        print(f"   - URL: {image_url[:100]}...")
+                        print(f"✅ PropertyViewSet: PropertyImage {i}/{len(images_to_create)} created successfully")
+                        print(f"   - PropertyImage ID: {prop_image.id}")
+                        print(f"   - Property ID: {property_obj.id}")
+                        print(f"   - Image URL: {image_url[:100]}...")
                         print(f"   - Is Primary: {prop_image.is_primary}")
+                        print(f"   - Order: {prop_image.order}")
                     except Exception as img_error:
                         print(f"❌ PropertyViewSet: Failed to create PropertyImage {i}: {img_error}")
+                        print(f"   Image URL was: {image_url[:100] if image_url else 'None'}...")
                         import traceback
                         traceback.print_exc()
                         continue
@@ -333,13 +343,19 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 print(f"✅ PropertyViewSet: Successfully created {created_count} PropertyImage objects")
                 print(f"✅ PropertyViewSet: Total PropertyImage objects for property {property_obj.id}: {final_count}")
                 
+                if final_count == 0:
+                    print(f"⚠️ WARNING: No PropertyImage objects were created despite having {len(images_data)} image URLs!")
+                    print(f"   This might indicate a database issue or validation problem.")
+                
                 # List all images for this property
                 all_images = PropertyImage.objects.filter(property=property_obj).order_by('order')
+                print(f"📸 All PropertyImage objects for property {property_obj.id}:")
                 for img in all_images:
-                    print(f"   - Image {img.id}: {img.image[:80]}... (primary: {img.is_primary}, order: {img.order})")
+                    print(f"   - Image ID {img.id}: {img.image[:80]}... (primary: {img.is_primary}, order: {img.order})")
             else:
                 print(f"⚠️ PropertyViewSet: No images_data to create PropertyImage objects")
                 print(f"   images_data is empty or None")
+                print(f"   Property will be created without images")
             
             # Log successful creation with full metadata
             print(f"🎉 PropertyViewSet: Property created successfully!")
