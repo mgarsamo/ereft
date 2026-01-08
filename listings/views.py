@@ -557,25 +557,6 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 print(f"⚠️ PropertyViewSet.perform_create: No images_data to create PropertyImage objects")
                 print(f"   images_data is empty or None")
                 print(f"   Property will be created without images")
-                
-                # Verify images were created
-                final_count = PropertyImage.objects.filter(property=property_obj).count()
-                print(f"✅ PropertyViewSet: Successfully created {created_count} PropertyImage objects")
-                print(f"✅ PropertyViewSet: Total PropertyImage objects for property {property_obj.id}: {final_count}")
-                
-                if final_count == 0:
-                    print(f"⚠️ WARNING: No PropertyImage objects were created despite having {len(images_data)} image URLs!")
-                    print(f"   This might indicate a database issue or validation problem.")
-                
-                # List all images for this property
-                all_images = PropertyImage.objects.filter(property=property_obj).order_by('order')
-                print(f"📸 All PropertyImage objects for property {property_obj.id}:")
-                for img in all_images:
-                    print(f"   - Image ID {img.id}: {img.image[:80]}... (primary: {img.is_primary}, order: {img.order})")
-            else:
-                print(f"⚠️ PropertyViewSet: No images_data to create PropertyImage objects")
-                print(f"   images_data is empty or None")
-                print(f"   Property will be created without images")
             
             # Log successful creation with full metadata
             print(f"🎉 PropertyViewSet: Property created successfully!")
