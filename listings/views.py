@@ -897,11 +897,16 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 print(f"⚠️ Failed to set default listing agent: {agent_error}")
                 agent_user = None
             
+            # Get status from serializer (user-provided) or default to 'active'
+            property_status = serializer.validated_data.get('status', 'active')
+            if not property_status or property_status not in ['active', 'pending', 'inactive', 'sold', 'rented']:
+                property_status = 'active'
+            
             # Create property with uploaded images and default agent
             property_obj = serializer.save(
                 owner=user,
                 agent=agent_user,  # Set default listing agent
-                status='active',
+                status=property_status,  # Use user-provided status or default to 'active'
                 is_published=True,
                 is_active=True
             )
