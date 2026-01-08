@@ -467,39 +467,119 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
         return None
     
     def to_representation(self, instance):
-        """CRITICAL: Ensure images are ALWAYS included with valid image_url"""
+        """CRITICAL: Ensure images are ALWAYS included with valid full HTTPS image_url"""
+        print(f"🔍 PropertyDetailSerializer.to_representation: Called for Property ID={instance.id if instance else 'None'}")
+        
         representation = super().to_representation(instance)
         
         # CRITICAL: Query images directly from database to ensure they're included
         db_images = list(instance.images.all().order_by('order', 'created_at')[:4])
         images_data = representation.get('images', [])
         
+        print(f"   DB images count: {len(db_images)}")
+        print(f"   Representation images count: {len(images_data)}")
+        
         # If serializer didn't include images, add them from database
         if not images_data or len(images_data) == 0:
             if db_images:
+                print(f"   ⚠️ No images in representation, adding from database...")
                 representation['images'] = [PropertyImageSerializer(img).data for img in db_images]
-                print(f"🔍 PropertyDetailSerializer.to_representation: Added {len(db_images)} images from database")
+                print(f"   ✅ Added {len(representation['images'])} images from database")
         
         # CRITICAL: Ensure every image has image_url set to a valid HTTPS URL
         if representation.get('images'):
-            for img_data in representation['images']:
-                # Get URL from image_url or image field
-                image_url = img_data.get('image_url')
+            print(f"   Ensuring all {len(representation['images'])} images have valid HTTPS image_url...")
+            for idx, img_data in enumerate(representation['images']):
+                current_url = img_data.get('image_url', '')
                 image_field = img_data.get('image')
                 
-                # If image_url is missing, use image field (which contains the Cloudinary URL)
-                if not image_url and image_field:
-                    image_url = str(image_field).strip()
+                print(f"   Image {idx + 1}: image_url='{current_url[:80] if current_url else 'None'}...', image_field='{image_field[:50] if image_field else 'None'}...'")
                 
-                if image_url:
-                    # Ensure HTTPS
-                    if image_url.startswith('http://'):
-                        image_url = image_url.replace('http://', 'https://', 1)
-                    # Set image_url
-                    img_data['image_url'] = image_url
+                # If image_url is missing or not HTTPS, construct from image field (public_id)
+                if not current_url or not current_url.startswith('https://'):
+                    if image_field:
+                        public_id = str(image_field).strip()
+                        
+                        # If it's already a URL, convert to HTTPS
+                        if public_id.startswith('http://') or public_id.startswith('https://'):
+                            if public_id.startswith('http://'):
+                                public_id = public_id.replace('http://', 'https://', 1)
+                            img_data['image_url'] = public_id
+                            print(f"   ✅ Image {idx + 1}: Converted HTTP to HTTPS: {public_id[:80]}...")
+                        else:
+                            # It's a public_id - construct full Cloudinary URL
+                            try:
+                                from .utils import get_cloudinary_url
+                                from django.conf import settings
+                                
+                                full_url = get_cloudinary_url(public_id)
+                                if not full_url:
+                                    cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                    full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                                    print(f"   ⚠️ Image {idx + 1}: SDK returned None, using manual: {full_url[:80]}...")
+                                else:
+                                    print(f"   ✅ Image {idx + 1}: Constructed via SDK: {full_url[:80]}...")
+                                img_data['image_url'] = full_url
+                            except Exception as e:
+                                print(f"   ⚠️ Image {idx + 1}: SDK failed: {e}, using manual fallback")
+                                from django.conf import settings
+                                cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                                img_data['image_url'] = full_url
+                                print(f"   ✅ Image {idx + 1}: Used manual fallback: {full_url[:80]}...")
+                    else:
+                        print(f"   ⚠️ Image {idx + 1}: No image field, cannot construct URL")
                 else:
-                    # If still no URL, this image is invalid
-                    print(f"⚠️ PropertyDetailSerializer: Image {img_data.get('id')} has no valid URL")
+                    print(f"   ✅ Image {idx + 1}: Already has valid HTTPS URL: {current_url[:80]}...")
+        
+        # CRITICAL: Ensure primary_image has valid HTTPS image_url
+        if representation.get('primary_image'):
+            primary = representation['primary_image']
+            primary_url = primary.get('image_url', '')
+            primary_image_field = primary.get('image')
+            
+            print(f"   primary_image: image_url='{primary_url[:80] if primary_url else 'None'}...', image_field='{primary_image_field[:50] if primary_image_field else 'None'}...'")
+            
+            if not primary_url or not primary_url.startswith('https://'):
+                if primary_image_field:
+                    public_id = str(primary_image_field).strip()
+                    
+                    if public_id.startswith('http://') or public_id.startswith('https://'):
+                        if public_id.startswith('http://'):
+                            public_id = public_id.replace('http://', 'https://', 1)
+                        primary['image_url'] = public_id
+                        print(f"   ✅ primary_image: Converted HTTP to HTTPS: {public_id[:80]}...")
+                    else:
+                        try:
+                            from .utils import get_cloudinary_url
+                            from django.conf import settings
+                            
+                            full_url = get_cloudinary_url(public_id)
+                            if not full_url:
+                                cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                            primary['image_url'] = full_url
+                            print(f"   ✅ primary_image: Constructed URL: {full_url[:80]}...")
+                        except Exception as e:
+                            from django.conf import settings
+                            cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                            full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                            primary['image_url'] = full_url
+                            print(f"   ✅ primary_image: Used manual fallback: {full_url[:80]}...")
+        
+        # FINAL VERIFICATION: Log what we're returning
+        final_images = representation.get('images', [])
+        final_primary = representation.get('primary_image')
+        print(f"✅ PropertyDetailSerializer.to_representation: FINAL CHECK for Property ID={instance.id}")
+        print(f"   Images count: {len(final_images)}")
+        for idx, img in enumerate(final_images[:3], 1):
+            img_url = img.get('image_url', 'None')
+            print(f"   Image {idx} image_url: '{img_url[:80] if img_url and img_url != 'None' else 'None'}...'")
+        if final_primary:
+            primary_url = final_primary.get('image_url', 'None')
+            print(f"   Primary image_url: '{primary_url[:80] if primary_url and primary_url != 'None' else 'None'}...'")
+        else:
+            print(f"   Primary image: None")
         
         return representation
     
