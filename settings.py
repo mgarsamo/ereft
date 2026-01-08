@@ -149,13 +149,41 @@ TEMPLATES = [
 # Priority: DATABASE_URL > POSTGRE_DATABASE_URL > SQLite
 DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRE_DATABASE_URL')
 
+# Log database configuration for debugging
+if DATABASE_URL:
+    print(f"🔍 Database URL found: {DATABASE_URL[:50]}...")  # Log first 50 chars for security
+    if 'postgresql' in DATABASE_URL or 'postgres' in DATABASE_URL:
+        print("✅ Using PostgreSQL database")
+    else:
+        print(f"⚠️ WARNING: Database URL doesn't appear to be PostgreSQL: {DATABASE_URL[:50]}...")
+else:
+    print("⚠️ WARNING: No DATABASE_URL or POSTGRE_DATABASE_URL found - using SQLite (data will NOT persist!)")
+
 if DATABASE_URL:
     # Production: Use DATABASE_URL from Render
-    DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL)
-    }
+    try:
+        DATABASES = {
+            'default': dj_database_url.parse(DATABASE_URL)
+        }
+        # Verify it's PostgreSQL
+        db_engine = DATABASES['default'].get('ENGINE', '')
+        if 'postgresql' in db_engine or 'postgres' in db_engine:
+            print(f"✅ PostgreSQL database configured: {DATABASES['default'].get('NAME', 'unknown')}")
+        else:
+            print(f"❌ ERROR: Database engine is not PostgreSQL: {db_engine}")
+            print(f"   This means data will NOT persist across deployments!")
+    except Exception as e:
+        print(f"❌ ERROR parsing DATABASE_URL: {e}")
+        print("   Falling back to SQLite (data will NOT persist!)")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 else:
     # Development: Use SQLite
+    print("⚠️ Using SQLite database - data will NOT persist across deployments!")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
