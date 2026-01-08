@@ -146,18 +146,28 @@ TEMPLATES = [
 # Database Configuration
 # ------------------------------------------------------
 # Use DATABASE_URL or POSTGRE_DATABASE_URL from environment (Render) or fallback to SQLite
-# Priority: DATABASE_URL > POSTGRE_DATABASE_URL > SQLite
-DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRE_DATABASE_URL')
+# Priority: POSTGRE_DATABASE_URL > DATABASE_URL > SQLite
+# NOTE: We prioritize POSTGRE_DATABASE_URL because Render might auto-set DATABASE_URL to SQLite
+DATABASE_URL = os.environ.get('POSTGRE_DATABASE_URL') or os.environ.get('DATABASE_URL')
 
 # Log database configuration for debugging
+print("=" * 60)
+print("DATABASE CONFIGURATION CHECK")
+print("=" * 60)
+print(f"POSTGRE_DATABASE_URL in env: {'✅ Set' if os.environ.get('POSTGRE_DATABASE_URL') else '❌ Not set'}")
+print(f"DATABASE_URL in env: {'✅ Set' if os.environ.get('DATABASE_URL') else '❌ Not set'}")
+
 if DATABASE_URL:
-    print(f"🔍 Database URL found: {DATABASE_URL[:50]}...")  # Log first 50 chars for security
+    print(f"🔍 Using database URL: {DATABASE_URL[:50]}...")  # Log first 50 chars for security
     if 'postgresql' in DATABASE_URL or 'postgres' in DATABASE_URL:
         print("✅ Using PostgreSQL database")
     else:
         print(f"⚠️ WARNING: Database URL doesn't appear to be PostgreSQL: {DATABASE_URL[:50]}...")
+        print("⚠️ This will use SQLite and data will NOT persist!")
 else:
     print("⚠️ WARNING: No DATABASE_URL or POSTGRE_DATABASE_URL found - using SQLite (data will NOT persist!)")
+    print("⚠️ Please set POSTGRE_DATABASE_URL in Render environment variables!")
+print("=" * 60)
 
 if DATABASE_URL:
     # Production: Use DATABASE_URL from Render

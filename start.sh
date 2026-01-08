@@ -76,20 +76,33 @@ PROPERTY_COUNT=$(python manage.py shell -c "from listings.models import Property
 
 echo "📊 Current property count: $PROPERTY_COUNT"
 
+# Always try to populate if count is less than 5, with retry logic
 if [ "$PROPERTY_COUNT" -lt "5" ]; then
     echo "📝 Database has $PROPERTY_COUNT properties. Populating sample data..."
     echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
     echo "🔄 Running: python manage.py populate_sample_data"
-    python manage.py populate_sample_data
+    
+    # Run populate_sample_data with explicit error handling
+    python manage.py populate_sample_data 2>&1
     EXIT_CODE=$?
+    
     if [ $EXIT_CODE -eq 0 ]; then
         echo "✅ Sample data population completed successfully"
         # Verify properties were created
+        sleep 2  # Give database a moment to commit
         NEW_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
         echo "📊 New property count: $NEW_COUNT"
+        
+        if [ "$NEW_COUNT" -eq "$PROPERTY_COUNT" ]; then
+            echo "⚠️ WARNING: Property count did not increase. Sample data may not have been created."
+            echo "⚠️ This could indicate a database connection issue."
+        else
+            echo "✅ Properties successfully created! ($PROPERTY_COUNT → $NEW_COUNT)"
+        fi
     else
-        echo "⚠️ Sample data population had errors (exit code: $EXIT_CODE), but continuing..."
-        echo "⚠️ This might mean sample data was not populated. Check logs above for details."
+        echo "❌ Sample data population failed with exit code: $EXIT_CODE"
+        echo "⚠️ Attempting to continue anyway, but sample data may not be available."
+        echo "⚠️ Check the logs above for error details."
     fi
 else
     echo "✅ Database already has $PROPERTY_COUNT properties. Skipping sample data population."
