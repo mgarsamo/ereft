@@ -1255,6 +1255,47 @@ class PropertyViewSet(viewsets.ModelViewSet):
             
             return Response({'detail': f'Failed to delete property: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def update(self, request, *args, **kwargs):
+        """Update a property - users can only update their own, admins can update any"""
+        instance = self.get_object()
+        user = request.user
+        
+        # Check if user is admin (staff or superuser)
+        is_admin = user.is_staff or user.is_superuser or user.email in ['admin@ereft.com', 'melaku.garsamo@gmail.com']
+        
+        # Verify ownership (unless admin)
+        if not is_admin and (not instance.owner or instance.owner_id != user.id):
+            return Response(
+                {'detail': 'You can only update your own listings.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # For non-admin users, restrict status to: active, rented, sold
+        if not is_admin and 'status' in request.data:
+            allowed_statuses = ['active', 'rented', 'sold']
+            requested_status = request.data.get('status', '').lower()
+            if requested_status not in allowed_statuses:
+                return Response(
+                    {'detail': f'You can only set status to: {", ".join(allowed_statuses)}. Contact admin for other status changes.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Proceed with update
+        partial = kwargs.pop('partial', False)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Clear cache
+        cache.delete(f"property_detail:{instance.id}")
+        cache.clear()
+        
+        return Response(serializer.data)
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Partial update a property - users can only update their own, admins can update any"""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
 
     def favorite(self, request, pk=None):
         """Toggle favorite status for a property"""
