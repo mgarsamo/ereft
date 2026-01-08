@@ -135,15 +135,18 @@ class PropertyImageSerializer(serializers.ModelSerializer):
             try:
                 from django.conf import settings
                 cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
-                # Construct: https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}
-                # Cloudinary will auto-detect format, but we can try common formats
-                # Since public_id might not include extension, Cloudinary will handle it
+                # CRITICAL: Construct full Cloudinary URL format:
+                # https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}
+                # Cloudinary will serve the image with the correct format automatically
+                # Public ID format: "ereft_properties/nggejftgnzxzwuitw3wp"
                 full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
                 representation['image_url'] = full_url
-                print(f"✅ PropertyImageSerializer: Constructed URL manually from public_id '{public_id}'")
+                print(f"✅ PropertyImageSerializer: Constructed URL manually from public_id '{public_id}': {full_url}")
                 return representation
             except Exception as e:
                 print(f"⚠️ PropertyImageSerializer: Failed to construct URL manually: {e}")
+                import traceback
+                traceback.print_exc()
         
         # If all else fails, ensure image_url is set (even if None)
         representation['image_url'] = image_url if image_url else None
