@@ -202,9 +202,52 @@ class PropertyViewSet(viewsets.ModelViewSet):
                         print(f"   Property creation will continue without this image")
                         continue
             
-            # Create property with uploaded images
+            # Get or create the default listing agent (Chilot Garsamo)
+            from django.contrib.auth.models import User
+            from .models import UserProfile
+            
+            default_agent_email = 'cb.garsamo@gmail.com'
+            default_agent_name = 'Chilot Garsamo'
+            default_agent_phone = '+251 966 913 617'
+            
+            try:
+                # Try to get existing agent user by email
+                agent_user = User.objects.filter(email=default_agent_email).first()
+                
+                if not agent_user:
+                    # Create agent user if it doesn't exist
+                    agent_username = 'chilot_garsamo_agent'
+                    agent_user, created = User.objects.get_or_create(
+                        username=agent_username,
+                        defaults={
+                            'email': default_agent_email,
+                            'first_name': 'Chilot',
+                            'last_name': 'Garsamo',
+                        }
+                    )
+                    if created:
+                        print(f"✅ Created default listing agent user: {default_agent_email}")
+                    
+                # Ensure agent profile exists and is marked as agent
+                agent_profile, _ = UserProfile.objects.get_or_create(user=agent_user)
+                agent_profile.is_agent = True
+                agent_profile.phone_number = default_agent_phone
+                agent_profile.email_verified = True
+                agent_profile.phone_verified = True
+                if not agent_profile.company_name:
+                    agent_profile.company_name = 'Ereft Realty'
+                agent_profile.save()
+                
+                print(f"✅ Default listing agent set: {default_agent_name} ({default_agent_email})")
+                
+            except Exception as agent_error:
+                print(f"⚠️ Failed to set default listing agent: {agent_error}")
+                agent_user = None
+            
+            # Create property with uploaded images and default agent
             property_obj = serializer.save(
                 owner=user,
+                agent=agent_user,  # Set default listing agent
                 status='active',
                 is_published=True,
                 is_active=True
