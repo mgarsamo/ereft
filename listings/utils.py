@@ -455,23 +455,49 @@ def get_cloudinary_url(public_id, transformation=None):
     Get a Cloudinary URL with optional transformations
     
     Args:
-        public_id: The public ID of the image
+        public_id: The public ID of the image (e.g., "ereft_properties/xmbzkzdrb9r52jcyihct")
         transformation: Optional transformation parameters
     
     Returns:
-        str: The Cloudinary URL
+        str: The full Cloudinary HTTPS URL
     """
     try:
+        # Ensure Cloudinary is configured
+        cloudinary.config(
+            cloud_name=getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc'),
+            secure=True
+        )
+        
+        # Build URL using Cloudinary SDK (will automatically add version for cache-busting)
         if transformation:
             url = cloudinary.CloudinaryImage(public_id).build_url(**transformation)
         else:
             url = cloudinary.CloudinaryImage(public_id).build_url()
         
+        # Ensure HTTPS
+        if url and url.startswith('http://'):
+            url = url.replace('http://', 'https://', 1)
+        
+        print(f"✅ get_cloudinary_url: Generated URL for public_id '{public_id}': {url[:80] if url else 'None'}...")
         return url
         
     except Exception as e:
-        print(f"❌ Error generating Cloudinary URL: {str(e)}")
-        return None
+        print(f"❌ Error generating Cloudinary URL for public_id '{public_id}': {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Fallback: Construct URL manually
+        try:
+            from django.conf import settings
+            cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+            # Manual construction: https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}
+            # Cloudinary will serve the image correctly without version/extensions
+            fallback_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+            print(f"✅ get_cloudinary_url: Using fallback URL: {fallback_url[:80]}...")
+            return fallback_url
+        except Exception as fallback_error:
+            print(f"❌ Failed to construct fallback URL: {fallback_error}")
+            return None
 
 def optimize_image_for_property(image_file):
     """
