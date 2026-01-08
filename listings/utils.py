@@ -547,6 +547,12 @@ def handle_property_image_upload(image_file, property_id):
             api_secret=api_secret
         )
         
+        # Ensure image_file is properly positioned at the start
+        if hasattr(image_file, 'seek'):
+            image_file.seek(0)
+        
+        print(f"📤 Uploading image to Cloudinary: {image_file.name if hasattr(image_file, 'name') else 'unnamed'} ({image_file.size if hasattr(image_file, 'size') else 'unknown size'} bytes)")
+        
         # Upload to Cloudinary with optimized settings
         result = cloudinary.uploader.upload(
             image_file,
@@ -562,19 +568,27 @@ def handle_property_image_upload(image_file, property_id):
             ]
         )
         
+        secure_url = result.get('secure_url') or result.get('url')
+        if not secure_url:
+            print(f"❌ Cloudinary upload succeeded but no URL returned in result")
+            print(f"   Result keys: {list(result.keys())}")
+            return None
+        
         print(f"✅ Image uploaded successfully to Cloudinary: {result.get('public_id', 'unknown')}")
-        print(f"   URL: {result.get('secure_url', 'N/A')}")
+        print(f"   URL: {secure_url[:100]}...")
         print(f"   Size: {result.get('bytes', 0)} bytes")
         
-        # Return formatted image data
-        return {
-            'public_id': result['public_id'],
-            'url': result['secure_url'],
+        # Return formatted image data with secure_url as primary URL
+        image_data = {
+            'public_id': result.get('public_id'),
+            'url': secure_url,
             'width': result.get('width', 0),
             'height': result.get('height', 0),
             'format': result.get('format', 'unknown'),
             'size': result.get('bytes', 0)
         }
+        
+        return image_data
         
     except cloudinary.exceptions.Error as e:
         print(f"❌ Cloudinary error: {str(e)}")

@@ -687,35 +687,53 @@ class Command(BaseCommand):
 
             # Use get_or_create with title to avoid duplicates
             # This ensures we never overwrite user-created properties
+            # CRITICAL: Only create/update sample properties, NEVER touch user-created properties
+            # Check if this is a sample property (owned by the sample agent)
             property_obj, created = Property.objects.get_or_create(
                 title=prop_payload['title'],
                 defaults={**prop_payload, 'owner': agent_user, 'is_published': True, 'is_active': True},
             )
 
+            # Only update if this property is owned by the sample agent (not a user-created property)
+            is_sample_property = property_obj.owner == agent_user
+
             if created:
-                self.stdout.write(f'✅ Created property: {prop_payload["title"]}')
+                self.stdout.write(f'✅ Created sample property: {prop_payload["title"]}')
                 properties_created += 1
-            else:
+                # For newly created sample properties, add images
+                for order, image_entry in enumerate(images_payload):
+                    PropertyImage.objects.create(
+                        property=property_obj,
+                        image=image_entry['url'],
+                        caption=image_entry.get('caption'),
+                        is_primary=(order == 0),
+                        order=order,
+                    )
+            elif is_sample_property:
+                # Only update sample properties (owned by agent_user), never user-created properties
                 for field, value in prop_payload.items():
                     setattr(property_obj, field, value)
                 property_obj.owner = agent_user
                 property_obj.is_published = True
                 property_obj.is_active = True
                 property_obj.save()
-                self.stdout.write(f'🔄 Updated property: {prop_payload["title"]}')
+                self.stdout.write(f'🔄 Updated sample property: {prop_payload["title"]}')
                 properties_updated += 1
-
-            # Refresh property images with curated gallery
-            PropertyImage.objects.filter(property=property_obj).delete()
-
-            for order, image_entry in enumerate(images_payload):
-                PropertyImage.objects.create(
-                    property=property_obj,
-                    image=image_entry['url'],
-                    caption=image_entry.get('caption'),
-                    is_primary=(order == 0),
-                    order=order,
-                )
+                
+                # Only refresh images for sample properties
+                PropertyImage.objects.filter(property=property_obj).delete()
+                for order, image_entry in enumerate(images_payload):
+                    PropertyImage.objects.create(
+                        property=property_obj,
+                        image=image_entry['url'],
+                        caption=image_entry.get('caption'),
+                        is_primary=(order == 0),
+                        order=order,
+                    )
+            else:
+                # This is a user-created property - DO NOT MODIFY IT
+                self.stdout.write(f'⏭️ Skipping user-created property: {prop_payload["title"]} (owned by {property_obj.owner.username})')
+                continue
         
         cache.clear()
         self.stdout.write('🧹 Cache cleared to reflect latest property data')
