@@ -144,6 +144,19 @@ fi
 echo "============================================================"
 echo ""
 
+# Update all properties to have status='active' if they don't have a valid status
+echo "🔄 Updating property statuses to 'active'..."
+python manage.py update_properties_status 2>&1
+STATUS_UPDATE_CODE=$?
+
+if [ $STATUS_UPDATE_CODE -eq 0 ]; then
+    echo "✅ Property status update completed successfully"
+else
+    echo "⚠️ Property status update completed with warnings (exit code: $STATUS_UPDATE_CODE)"
+fi
+
+echo ""
+
 # Test welcome email (only on first start or if explicitly needed)
 # Commented out by default to avoid sending test emails on every restart
 # Uncomment the line below if you want to test email on every start
