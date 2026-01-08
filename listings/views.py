@@ -161,28 +161,58 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     if images_value.strip() and len(images_value.strip()) > 10:
                         image_urls.append(images_value.strip())
         
-        # CRITICAL: Ensure all image URLs are valid strings (not File objects)
+        # CRITICAL: Ensure all image URLs are valid strings (not File objects or other types)
         # Filter and convert to ensure they're all valid URL strings
         validated_image_urls = []
         for url in image_urls:
+            # Convert to string first, handling all possible types
             if isinstance(url, str):
-                url = url.strip()
-                if url and len(url) > 10 and (url.startswith('http://') or url.startswith('https://')):
-                    validated_image_urls.append(url)
-            elif url:
+                url_str = url.strip()
+            elif url is None:
+                continue  # Skip None values
+            elif hasattr(url, 'read'):  # File-like object
+                print(f"   ⚠️ Skipping File-like object: {type(url)}")
+                continue
+            else:
                 # Try to convert to string
                 url_str = str(url).strip()
-                if url_str and len(url_str) > 10 and (url_str.startswith('http://') or url_str.startswith('https://')):
-                    validated_image_urls.append(url_str)
+            
+            # Validate it's a valid URL string
+            if url_str and len(url_str) > 10 and (url_str.startswith('http://') or url_str.startswith('https://')):
+                # Ensure it's actually a string (not bytes or other types)
+                validated_image_urls.append(str(url_str))
+            else:
+                print(f"   ⚠️ Skipping invalid URL: {url_str[:50] if url_str else 'None'}...")
         
         print(f"✅ PropertyViewSet.create: Validated {len(validated_image_urls)} image URLs")
         for idx, url in enumerate(validated_image_urls, 1):
-            print(f"   Validated URL {idx}: {url[:100]}...")
+            # Verify each is actually a string
+            if not isinstance(url, str):
+                print(f"   ❌ ERROR: URL {idx} is not a string! Type: {type(url)}, Value: {url}")
+                # Convert to string
+                validated_image_urls[idx - 1] = str(url)
+            print(f"   Validated URL {idx}: type={type(url).__name__}, value={url[:100]}...")
+        
+        # CRITICAL: Final verification - ensure ALL items are strings
+        validated_image_urls = [str(url) for url in validated_image_urls if url]
         
         # Set the images list in the data dict for the serializer
         if validated_image_urls:
-            data['images'] = validated_image_urls
-            print(f"✅ PropertyViewSet.create: Set {len(validated_image_urls)} image URLs in serializer data")
+            # CRITICAL: Double-check that all items are strings before passing to serializer
+            string_urls = []
+            for idx, url in enumerate(validated_image_urls, 1):
+                if isinstance(url, str):
+                    string_urls.append(url)
+                else:
+                    print(f"   ❌ CRITICAL: URL {idx} is not a string! Converting...")
+                    string_urls.append(str(url))
+            
+            data['images'] = string_urls
+            print(f"✅ PropertyViewSet.create: Set {len(string_urls)} image URLs (all strings) in serializer data")
+            # Final type check
+            for idx, url in enumerate(string_urls, 1):
+                if not isinstance(url, str):
+                    print(f"   ❌ CRITICAL ERROR: URL {idx} is still not a string after conversion! Type: {type(url)}")
         else:
             # Remove images key if empty to avoid validation errors
             data.pop('images', None)
@@ -198,25 +228,69 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 data.pop('images', None)
             print(f"🏠 PropertyViewSet.create: Detected {len(request.FILES.getlist('images'))} image files in request.FILES, removed from serializer data")
         
-        # CRITICAL: Final validation before serializer
+        # CRITICAL: Final validation before serializer - MUST be all strings
         if 'images' in data:
             images_check = data['images']
-            print(f"🏠 PropertyViewSet.create: Final check - 'images' in data: type={type(images_check)}")
+            print(f"🏠 PropertyViewSet.create: Final check BEFORE serializer - 'images' in data: type={type(images_check)}")
             if isinstance(images_check, list):
                 print(f"🏠 PropertyViewSet.create: Final check - list has {len(images_check)} items")
+                # Convert ALL items to strings - no exceptions
+                string_list = []
                 for idx, item in enumerate(images_check):
                     item_type = type(item)
-                    item_str = str(item)[:50] if item else 'None'
-                    print(f"   Final item {idx}: type={item_type}, value={item_str}...")
-                    if not isinstance(item, str):
-                        print(f"   ❌ ERROR: Item {idx} is not a string! Type: {item_type}")
+                    if isinstance(item, str):
+                        string_list.append(item.strip())
+                        print(f"   ✅ Item {idx}: Already string - {item[:50]}...")
+                    elif item is None:
+                        print(f"   ⚠️ Item {idx}: None value, skipping")
+                        continue
+                    elif hasattr(item, 'read'):  # File-like object
+                        print(f"   ⚠️ Item {idx}: File-like object ({item_type}), skipping")
+                        continue
+                    else:
                         # Convert to string
-                        if item:
-                            data['images'][idx] = str(item).strip()
+                        item_str = str(item).strip()
+                        if item_str:
+                            string_list.append(item_str)
+                            print(f"   ✅ Item {idx}: Converted {item_type} to string - {item_str[:50]}...")
                         else:
-                            # Remove invalid items
-                            data['images'] = [x for x in data['images'] if x and isinstance(x, str)]
-                            print(f"   ✅ Fixed: Removed invalid items, {len(data['images'])} valid items remain")
+                            print(f"   ⚠️ Item {idx}: Empty after conversion, skipping")
+                
+                # Ensure we only have valid URL strings
+                final_string_list = []
+                for url in string_list:
+                    if isinstance(url, str) and url.startswith(('http://', 'https://')) and len(url) > 10:
+                        final_string_list.append(url)
+                    else:
+                        print(f"   ⚠️ Removed invalid URL: {url[:50]}...")
+                
+                # Update data with cleaned list
+                if final_string_list:
+                    data['images'] = final_string_list
+                    print(f"✅ PropertyViewSet.create: Final list has {len(final_string_list)} valid string URLs")
+                    # Verify one more time
+                    for idx, url in enumerate(final_string_list):
+                        if not isinstance(url, str):
+                            print(f"   ❌ CRITICAL: URL {idx} is STILL not a string! Type: {type(url)}")
+                            final_string_list[idx] = str(url)
+                    data['images'] = final_string_list
+                else:
+                    # Remove if empty
+                    data.pop('images', None)
+                    print(f"⚠️ PropertyViewSet.create: No valid URLs after final cleanup, removed 'images' from data")
+            else:
+                print(f"❌ ERROR: 'images' is not a list! Type: {type(images_check)}, removing from data")
+                data.pop('images', None)
+        
+        # CRITICAL: One last check - verify data['images'] is a list of strings before serializer
+        if 'images' in data:
+            if not isinstance(data['images'], list):
+                print(f"❌ CRITICAL: data['images'] is not a list! Type: {type(data['images'])}, removing")
+                data.pop('images', None)
+            elif not all(isinstance(item, str) for item in data['images']):
+                print(f"❌ CRITICAL: Not all items in data['images'] are strings!")
+                data['images'] = [str(item) for item in data['images'] if item]
+                print(f"✅ Fixed: Converted all items to strings, {len(data['images'])} items remain")
         
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
