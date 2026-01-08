@@ -200,10 +200,24 @@ class PropertyListSerializer(serializers.ModelSerializer):
             return obj.favorited_by.filter(user=request.user).exists()
         return False
 
+class FlexibleCharField(serializers.CharField):
+    """CharField that can handle any input type and convert to string"""
+    def to_internal_value(self, data):
+        """Convert any input to string"""
+        if data is None:
+            return None
+        if isinstance(data, str):
+            return data.strip()
+        # Convert anything else to string
+        try:
+            return str(data).strip()
+        except:
+            raise serializers.ValidationError("Cannot convert to string")
+
 class PropertyCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating properties - Ethiopia fields, m² units"""
     images = serializers.ListField(
-        child=serializers.CharField(allow_blank=False, allow_null=False),
+        child=FlexibleCharField(allow_blank=False, allow_null=False),
         required=False,
         allow_empty=True,
         allow_null=True
