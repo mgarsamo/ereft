@@ -63,6 +63,40 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         
         print(f"   image_value (from DB): '{image_value[:80]}...' (length: {len(image_value)})")
         
+        # CRITICAL FIX: Extract public_id from list representation if stored incorrectly
+        # Handle cases where the value is stored as ['public_id'] or "[ 'public_id' ]" etc.
+        import re
+        import ast
+        import json
+        
+        # Try to extract public_id from list representation
+        if image_value.startswith('[') and image_value.endswith(']'):
+            print(f"   ⚠️ WARNING: image_value appears to be a list representation: '{image_value}'")
+            try:
+                # Try to parse as Python list literal
+                parsed_list = ast.literal_eval(image_value)
+                if isinstance(parsed_list, list) and len(parsed_list) > 0:
+                    image_value = str(parsed_list[0]).strip().strip("'\"")
+                    print(f"   ✅ Extracted public_id from list: '{image_value}'")
+            except (ValueError, SyntaxError):
+                try:
+                    # Try to parse as JSON
+                    parsed_list = json.loads(image_value)
+                    if isinstance(parsed_list, list) and len(parsed_list) > 0:
+                        image_value = str(parsed_list[0]).strip().strip("'\"")
+                        print(f"   ✅ Extracted public_id from JSON list: '{image_value}'")
+                except (ValueError, json.JSONDecodeError):
+                    # Try regex extraction
+                    match = re.search(r"['\"]([^'\"]+)['\"]", image_value)
+                    if match:
+                        image_value = match.group(1)
+                        print(f"   ✅ Extracted public_id using regex: '{image_value}'")
+                    else:
+                        print(f"   ❌ Could not extract public_id from list representation")
+        
+        # Remove any remaining quotes
+        image_value = image_value.strip().strip("'\"")
+        
         # If it's already a full URL (starts with http/https), return it directly
         if image_value.startswith('http://') or image_value.startswith('https://'):
             # Convert HTTP to HTTPS
@@ -75,6 +109,15 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         # Public IDs don't start with http, they're just identifiers
         if image_value and not image_value.startswith('http'):
             print(f"   Constructing URL from public_id: '{image_value}'")
+            
+            # CRITICAL: Validate public_id format (should not contain brackets or quotes)
+            if '[' in image_value or ']' in image_value or image_value.startswith("'") or image_value.startswith('"'):
+                print(f"   ❌ WARNING: Invalid public_id format detected: '{image_value}'")
+                # Try to clean it up one more time
+                image_value = re.sub(r"^['\"]+|['\"]+$", "", image_value)
+                image_value = re.sub(r"\[|\]", "", image_value)
+                image_value = image_value.strip()
+                print(f"   Cleaned public_id: '{image_value}'")
             
             # Try using Cloudinary SDK first
             try:

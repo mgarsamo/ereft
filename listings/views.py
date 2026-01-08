@@ -925,14 +925,45 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 
                 for i, image_url in enumerate(images_to_create, 1):
                     try:
+                        # CRITICAL FIX: Extract public_id from list representation if needed
+                        import re
+                        import ast
+                        import json
+                        
                         # Normalize image URL - extract from dict if needed
                         if isinstance(image_url, dict):
                             image_url = image_url.get('url') or image_url.get('secure_url') or str(image_url)
                         else:
                             image_url = str(image_url).strip()
                         
+                        # CRITICAL: Handle list representation like "['ereft_properties/xxx']"
+                        if image_url.startswith('[') and image_url.endswith(']'):
+                            print(f"   ⚠️ WARNING: image_url is a list representation: '{image_url}'")
+                            try:
+                                # Try to parse as Python list literal
+                                parsed_list = ast.literal_eval(image_url)
+                                if isinstance(parsed_list, list) and len(parsed_list) > 0:
+                                    image_url = str(parsed_list[0]).strip().strip("'\"")
+                                    print(f"   ✅ Extracted public_id from list: '{image_url}'")
+                            except (ValueError, SyntaxError):
+                                try:
+                                    # Try to parse as JSON
+                                    parsed_list = json.loads(image_url)
+                                    if isinstance(parsed_list, list) and len(parsed_list) > 0:
+                                        image_url = str(parsed_list[0]).strip().strip("'\"")
+                                        print(f"   ✅ Extracted public_id from JSON list: '{image_url}'")
+                                except (ValueError, json.JSONDecodeError):
+                                    # Try regex extraction
+                                    match = re.search(r"['\"]([^'\"]+)['\"]", image_url)
+                                    if match:
+                                        image_url = match.group(1)
+                                        print(f"   ✅ Extracted public_id using regex: '{image_url}'")
+                        
+                        # Remove any remaining quotes
+                        image_url = image_url.strip().strip("'\"")
+                        
                         # Validate URL exists and is not empty
-                        if not image_url or image_url in ['None', 'null', ''] or len(image_url) < 10:
+                        if not image_url or image_url in ['None', 'null', ''] or len(image_url) < 5:
                             print(f"⚠️ PropertyViewSet.perform_create: Skipping invalid image URL at index {i}: {image_url}")
                             continue
                         
@@ -956,18 +987,23 @@ class PropertyViewSet(viewsets.ModelViewSet):
                                     # Remove file extension and any transformations
                                     # Format: v1234567/{public_id}.{ext} or just {public_id}.{ext}
                                     if '/' in path_part:
-                                        # Has version or transformation
-                                        public_id = path_part.split('/')[-1]  # Get last part
+                                        # Has version or transformation - get the public_id part (last segment before .ext)
+                                        path_part = path_part.split('/')[-1]
+                                    # Remove file extension if present
+                                    if '.' in path_part:
+                                        public_id = path_part.rsplit('.', 1)[0]
                                     else:
                                         public_id = path_part
-                                    # Remove file extension
-                                    if '.' in public_id:
-                                        public_id = public_id.rsplit('.', 1)[0]
-                                    print(f"   Extracted public_id '{public_id}' from URL")
+                                    print(f"   ✅ Extracted public_id '{public_id}' from URL: {image_url[:80]}...")
                             else:
                                 # Keep as-is if we can't extract
                                 print(f"   ⚠️ Could not extract public_id from URL, storing as-is: {image_url[:50]}...")
                                 public_id = image_url
+                        
+                        # CRITICAL: Ensure public_id is a clean string (not list representation)
+                        public_id = str(public_id).strip().strip("'\"")
+                        public_id = re.sub(r"\[|\]", "", public_id)  # Remove any brackets
+                        public_id = public_id.strip()
                         
                         # Validate public_id format (should contain / for folder structure)
                         # Expected: "ereft_properties/xxxxx"
@@ -975,12 +1011,18 @@ class PropertyViewSet(viewsets.ModelViewSet):
                             print(f"⚠️ PropertyViewSet.perform_create: Invalid public_id, skipping: {public_id}")
                             continue
                         
+                        if '[' in public_id or ']' in public_id:
+                            print(f"❌ ERROR: public_id still contains brackets: '{public_id}'")
+                            continue
+                        
+                        print(f"   ✅ Final public_id to store: '{public_id}' (type: {type(public_id).__name__})")
+                        
                         # CRITICAL: Create PropertyImage object in database
-                        # Store public_id (like "ereft_properties/nggejftgnzxzwuitw3wp")
+                        # Store public_id as a STRING (like "ereft_properties/nggejftgnzxzwuitw3wp")
                         # Serializer will construct full URL when needed
                         prop_image = PropertyImage.objects.create(
                             property=property_obj,
-                            image=public_id,  # Store public_id, not full URL
+                            image=public_id,  # Store public_id as STRING, not list
                             is_primary=(i == 1),
                             order=i
                         )
