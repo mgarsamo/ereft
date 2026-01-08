@@ -19,10 +19,17 @@ python manage.py collectstatic --noinput
 echo "🏠 Checking if sample data population is needed..."
 PROPERTY_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
 
+echo "📊 Current property count: $PROPERTY_COUNT"
+
 if [ "$PROPERTY_COUNT" -lt "5" ]; then
     echo "📝 Database has $PROPERTY_COUNT properties. Populating sample data..."
     echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
     python manage.py populate_sample_data
+    if [ $? -eq 0 ]; then
+        echo "✅ Sample data population completed successfully"
+    else
+        echo "⚠️ Sample data population had errors, but continuing..."
+    fi
 else
     echo "✅ Database already has $PROPERTY_COUNT properties. Skipping sample data population."
     echo "✅ User-created properties are preserved and will not be affected."
