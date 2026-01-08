@@ -127,13 +127,21 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     item_str = str(item).strip()
                     # Skip if it's a File object (shouldn't happen but handle it)
                     if hasattr(item, 'name'):
-                        print(f"   ⚠️ Item {idx} is a File object, skipping (images should be URLs)")
+                        print(f"   ⚠️ Item {idx} is a File object, skipping (images should be public_id strings)")
                         continue
-                    # Validate it's a URL string
-                    if item_str and len(item_str) > 10 and (item_str.startswith('http://') or item_str.startswith('https://')):
-                        image_urls.append(item_str)
+                    # Validate it's a valid public_id string (e.g., "ereft_properties/nggejftgnzxzwuitw3wp")
+                    # Accept either public_id OR full URL (for backwards compatibility)
+                    if item_str and len(item_str) > 5:
+                        # Accept if it's a public_id (contains / and no spaces) OR a full URL
+                        is_public_id = '/' in item_str and ' ' not in item_str and len(item_str) > 5
+                        is_full_url = item_str.startswith('http://') or item_str.startswith('https://')
+                        if is_public_id or is_full_url:
+                            image_urls.append(item_str)
+                            print(f"   ✅ Item {idx}: Valid {'public_id' if is_public_id else 'URL'}: {item_str[:50]}...")
+                        else:
+                            print(f"   ⚠️ Item {idx} is not a valid public_id or URL: {item_str[:50]}...")
                     else:
-                        print(f"   ⚠️ Item {idx} is not a valid URL: {item_str[:50]}...")
+                        print(f"   ⚠️ Item {idx} is too short: {item_str[:50] if item_str else 'None'}...")
         
         # Now copy the data (this converts QueryDict to dict, losing getlist capability)
         data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
@@ -153,13 +161,27 @@ class PropertyViewSet(viewsets.ModelViewSet):
                             if hasattr(v, 'name'):
                                 print(f"   ⚠️ List item {idx} is a File object, skipping")
                                 continue
-                            # Validate URL
-                            if v_str and len(v_str) > 10 and (v_str.startswith('http://') or v_str.startswith('https://')):
-                                image_urls.append(v_str)
+                            # Validate it's a valid public_id string OR full URL
+                            if v_str and len(v_str) > 5:
+                                is_public_id = '/' in v_str and ' ' not in v_str and len(v_str) > 5
+                                is_full_url = v_str.startswith('http://') or v_str.startswith('https://')
+                                if is_public_id or is_full_url:
+                                    image_urls.append(v_str)
+                                    print(f"   ✅ List item {idx}: Valid {'public_id' if is_public_id else 'URL'}: {v_str[:50]}...")
+                                else:
+                                    print(f"   ⚠️ List item {idx} is not valid: {v_str[:50]}...")
                 elif isinstance(images_value, str):
                     print(f"🏠 PropertyViewSet.create: Found single string value: {images_value[:100]}...")
-                    if images_value.strip() and len(images_value.strip()) > 10:
-                        image_urls.append(images_value.strip())
+                    value_str = images_value.strip()
+                    if value_str and len(value_str) > 5:
+                        # Accept public_id OR full URL
+                        is_public_id = '/' in value_str and ' ' not in value_str
+                        is_full_url = value_str.startswith('http://') or value_str.startswith('https://')
+                        if is_public_id or is_full_url:
+                            image_urls.append(value_str)
+                            print(f"   ✅ Single value: Valid {'public_id' if is_public_id else 'URL'}: {value_str[:50]}...")
+                        else:
+                            print(f"   ⚠️ Single value is not valid: {value_str[:50]}...")
         
         # CRITICAL: Ensure all image URLs are valid strings (not File objects or other types)
         # Filter and convert to ensure they're all valid URL strings
@@ -177,12 +199,19 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 # Try to convert to string
                 url_str = str(url).strip()
             
-            # Validate it's a valid URL string
-            if url_str and len(url_str) > 10 and (url_str.startswith('http://') or url_str.startswith('https://')):
-                # Ensure it's actually a string (not bytes or other types)
-                validated_image_urls.append(str(url_str))
+            # Validate it's a valid public_id string OR full URL
+            # public_id format: "ereft_properties/nggejftgnzxzwuitw3wp" (contains /, no spaces, > 5 chars)
+            # full URL format: "https://res.cloudinary.com/..."
+            if url_str and len(url_str) > 5:
+                is_public_id = '/' in url_str and ' ' not in url_str and len(url_str) > 5
+                is_full_url = url_str.startswith('http://') or url_str.startswith('https://')
+                if is_public_id or is_full_url:
+                    # Ensure it's actually a string (not bytes or other types)
+                    validated_image_urls.append(str(url_str))
+                else:
+                    print(f"   ⚠️ Skipping invalid value (not public_id or URL): {url_str[:50]}...")
             else:
-                print(f"   ⚠️ Skipping invalid URL: {url_str[:50] if url_str else 'None'}...")
+                print(f"   ⚠️ Skipping too short value: {url_str[:50] if url_str else 'None'}...")
         
         print(f"✅ PropertyViewSet.create: Validated {len(validated_image_urls)} image URLs")
         for idx, url in enumerate(validated_image_urls, 1):
@@ -256,13 +285,19 @@ class PropertyViewSet(viewsets.ModelViewSet):
                         else:
                             print(f"   ⚠️ Item {idx}: Empty after conversion, skipping")
                 
-                # Ensure we only have valid URL strings
+                # Ensure we only have valid public_id strings OR full URLs
                 final_string_list = []
                 for url in string_list:
-                    if isinstance(url, str) and url.startswith(('http://', 'https://')) and len(url) > 10:
-                        final_string_list.append(url)
+                    if isinstance(url, str) and len(url) > 5:
+                        # Accept public_id (contains /, no spaces) OR full URL
+                        is_public_id = '/' in url and ' ' not in url
+                        is_full_url = url.startswith('http://') or url.startswith('https://')
+                        if is_public_id or is_full_url:
+                            final_string_list.append(url)
+                        else:
+                            print(f"   ⚠️ Removed invalid value (not public_id or URL): {url[:50]}...")
                     else:
-                        print(f"   ⚠️ Removed invalid URL: {url[:50]}...")
+                        print(f"   ⚠️ Removed too short or non-string value: {url[:50] if url else 'None'}...")
                 
                 # Update data with cleaned list
                 if final_string_list:
