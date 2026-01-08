@@ -86,14 +86,58 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 pass
 
         response = super().list(request, *args, **kwargs)
+        
+        # Debug: Log image data for first property
+        if response.data and 'results' in response.data and len(response.data['results']) > 0:
+            first_prop = response.data['results'][0]
+            print(f"🔍 PropertyListSerializer Debug - First property:")
+            print(f"   ID: {first_prop.get('id')}")
+            print(f"   Title: {first_prop.get('title')}")
+            print(f"   Has images array: {bool(first_prop.get('images'))}")
+            print(f"   Images count: {len(first_prop.get('images', []))}")
+            if first_prop.get('images'):
+                for idx, img in enumerate(first_prop['images'][:2], 1):
+                    print(f"   Image {idx}: image_url={img.get('image_url', 'MISSING')[:80]}...")
+            print(f"   Primary image: {first_prop.get('primary_image')}")
+        
         cache.set(cache_key, response.data, timeout=self.CACHE_TIMEOUT)
         return response
 
     def create(self, request, *args, **kwargs):
         """Create a property and return the full detail payload including generated ID."""
-        # Handle multipart form data (file uploads)
-        # The serializer expects image URLs (strings), but we handle file uploads in perform_create
+        # CRITICAL: Extract image URLs BEFORE copying, as getlist() only works on QueryDict
+        image_urls = []
+        
+        # Method 1: Use getlist if available (QueryDict)
+        if hasattr(request.data, 'getlist'):
+            image_urls = request.data.getlist('images')
+            if image_urls:
+                image_urls = [str(url).strip() for url in image_urls if url and str(url).strip() and len(str(url).strip()) > 10]
+                print(f"🏠 PropertyViewSet.create: Found {len(image_urls)} image URLs via getlist('images')")
+                for idx, url in enumerate(image_urls, 1):
+                    print(f"   Image URL {idx}: {url[:100]}...")
+        
+        # Now copy the data (this converts QueryDict to dict, losing getlist capability)
         data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        
+        # Method 2: If getlist didn't work, try data['images'] which might be a list already
+        if not image_urls and 'images' in data:
+            images_value = data.get('images')
+            if images_value:
+                if isinstance(images_value, list):
+                    image_urls = [str(v).strip() for v in images_value if v and str(v).strip() and len(str(v).strip()) > 10]
+                    print(f"🏠 PropertyViewSet.create: Found {len(image_urls)} image URLs in list")
+                elif isinstance(images_value, str) and images_value.strip():
+                    image_urls = [images_value.strip()]
+                    print(f"🏠 PropertyViewSet.create: Found single image URL: {images_value[:100]}...")
+        
+        # Set the images list in the data dict for the serializer
+        if image_urls:
+            data['images'] = image_urls
+            print(f"✅ PropertyViewSet.create: Set {len(image_urls)} image URLs in serializer data")
+        else:
+            data.pop('images', None)
+            print(f"⚠️ PropertyViewSet.create: No valid image URLs found")
         
         # If images are being uploaded as files, remove them from serializer data
         # They will be handled in perform_create via request.FILES
@@ -113,22 +157,150 @@ class PropertyViewSet(viewsets.ModelViewSet):
         property_obj = self.perform_create(serializer)
         property_obj = property_obj or serializer.instance
 
+        # CRITICAL: Force database commit and reload property with images
+        from django.db import transaction
+        transaction.commit()
+        
+        # CRITICAL: Reload property with images prefetched to ensure they're available
+        property_obj.refresh_from_db()
+        property_obj = Property.objects.prefetch_related('images').select_related('owner', 'agent').get(id=property_obj.id)
+        
+        # CRITICAL: Verify images exist in database BEFORE serialization
+        db_images = list(PropertyImage.objects.filter(property=property_obj).order_by('order', 'created_at'))
+        print(f"🔍 PropertyViewSet.create: Verifying images for property {property_obj.id}")
+        print(f"   - Database has {len(db_images)} PropertyImage objects")
+        
+        if db_images:
+            for idx, img in enumerate(db_images, 1):
+                print(f"   DB Image {idx}: ID={img.id}, URL={img.image[:80] if img.image else 'NO URL'}..., primary={img.is_primary}, order={img.order}")
+        else:
+            print(f"   ❌ NO IMAGES IN DATABASE for property {property_obj.id}!")
+
+        # Serialize property with images
         detail_serializer = PropertyDetailSerializer(
             property_obj,
             context=self.get_serializer_context()
         )
-        headers = self.get_success_headers(detail_serializer.data)
-        return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        
+        # Get serialized data
+        response_data = detail_serializer.data
+        
+        # CRITICAL: Force images into response if serializer didn't include them
+        images_in_response = response_data.get('images', [])
+        print(f"🔍 PropertyViewSet.create: Serializer returned {len(images_in_response)} images")
+        
+        if not images_in_response or len(images_in_response) == 0:
+            print(f"❌ CRITICAL: Serializer returned NO images but database has {len(db_images)}!")
+            if db_images:
+                # Force add images from database
+                print(f"   Adding {len(db_images)} images directly from database to response...")
+                response_data['images'] = [PropertyImageSerializer(img).data for img in db_images]
+                print(f"   ✅ Added {len(response_data['images'])} images to response")
+        
+        # CRITICAL: Ensure every image has image_url set to a valid HTTPS URL
+        if response_data.get('images'):
+            for idx, img_data in enumerate(response_data['images'], 1):
+                # Get image URL - prefer image_url, fallback to image field
+                image_url = img_data.get('image_url')
+                image_field = img_data.get('image')
+                
+                if not image_url and image_field:
+                    # Use image field as image_url
+                    image_url = str(image_field).strip()
+                
+                if image_url:
+                    # Ensure HTTPS
+                    if image_url.startswith('http://'):
+                        image_url = image_url.replace('http://', 'https://', 1)
+                    # Set image_url
+                    img_data['image_url'] = image_url
+                    print(f"   ✅ Response Image {idx}: image_url={image_url[:80]}...")
+                else:
+                    print(f"   ❌ Response Image {idx}: NO URL available!")
+        
+        # CRITICAL: Verify primary_image is set correctly
+        if not response_data.get('primary_image') and response_data.get('images'):
+            primary_img = response_data['images'][0]  # First image as primary
+            response_data['primary_image'] = {
+                'id': primary_img.get('id'),
+                'image': primary_img.get('image'),
+                'image_url': primary_img.get('image_url'),
+                'is_primary': True,
+            }
+            print(f"   ✅ Set primary_image from first image")
+        
+        # Final verification
+        final_images = response_data.get('images', [])
+        print(f"✅ PropertyViewSet.create: FINAL RESPONSE VERIFICATION")
+        print(f"   - Response includes {len(final_images)} images")
+        print(f"   - Property ID: {property_obj.id}")
+        print(f"   - Property Title: {property_obj.title}")
+        
+        for idx, img in enumerate(final_images[:4], 1):
+            img_url = img.get('image_url', img.get('image', 'MISSING'))
+            print(f"   Final Image {idx}: image_url={str(img_url)[:100] if img_url else 'MISSING'}...")
+        
+        headers = self.get_success_headers(response_data)
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
     
     def retrieve(self, request, *args, **kwargs):
         """Return cached property detail responses when available."""
         pk = kwargs.get('pk')
         cache_key = f"property_detail:{pk}"
+        
+        # For debugging, skip cache temporarily or add cache-busting query param
+        # Uncomment the next line to bypass cache during debugging
+        # cache.delete(cache_key)
+        
         cached_payload = cache.get(cache_key)
         if cached_payload is not None:
-            return Response(cached_payload)
+            # Debug: Log cached data
+            if cached_payload and isinstance(cached_payload, dict):
+                images_count = len(cached_payload.get('images', []))
+                print(f"🔍 PropertyViewSet.retrieve: Returning cached data for property {pk}")
+                print(f"   Cached images count: {images_count}")
+                if images_count == 0:
+                    print(f"   ⚠️ Cached data has no images - clearing cache to force refresh")
+                    cache.delete(cache_key)
+                    # Fall through to get fresh data
+                else:
+                    return Response(cached_payload)
+
+        # CRITICAL: Force prefetch images to ensure they're available
+        instance = self.get_object()
+        
+        # Force reload with images prefetched
+        instance = Property.objects.prefetch_related('images').select_related('owner', 'agent').get(id=instance.id)
+        
+        # CRITICAL: Verify images exist in database
+        db_images = list(PropertyImage.objects.filter(property=instance).order_by('order', 'created_at'))
+        print(f"🔍 PropertyViewSet.retrieve: Property {pk} has {len(db_images)} images in database")
 
         response = super().retrieve(request, *args, **kwargs)
+        
+        # CRITICAL: Ensure images are in response
+        response_data = response.data if hasattr(response, 'data') else {}
+        if isinstance(response_data, dict):
+            images_in_response = response_data.get('images', [])
+            
+            # If images are missing, add them from database
+            if not images_in_response or len(images_in_response) == 0:
+                if db_images:
+                    print(f"⚠️ Response missing images! Adding {len(db_images)} from database")
+                    response_data['images'] = [PropertyImageSerializer(img).data for img in db_images]
+            
+            # CRITICAL: Ensure each image has image_url
+            if response_data.get('images'):
+                for img_data in response_data['images']:
+                    if not img_data.get('image_url') and img_data.get('image'):
+                        url = str(img_data['image']).strip()
+                        if url.startswith('http://'):
+                            url = url.replace('http://', 'https://', 1)
+                        img_data['image_url'] = url
+            
+            # Update response with corrected data
+            response.data = response_data
+        
         cache.set(cache_key, response.data, timeout=self.CACHE_TIMEOUT)
         return response
     
@@ -182,18 +354,27 @@ class PropertyViewSet(viewsets.ModelViewSet):
             
             images_data = []
 
-            # Accept pre-uploaded image URLs from payload (e.g., mobile app)
+            # Accept pre-uploaded image URLs from payload (e.g., mobile app or web form)
             payload_images = serializer.validated_data.pop('images', []) if 'images' in serializer.validated_data else []
             if payload_images:
-                print(f"🏠 PropertyViewSet: Received {len(payload_images)} pre-uploaded image URLs")
+                print(f"🏠 PropertyViewSet.perform_create: Received {len(payload_images)} pre-uploaded image URLs from serializer")
+                print(f"   Type of payload_images: {type(payload_images)}")
+                print(f"   Content: {payload_images}")
+                
                 for idx, image_value in enumerate(payload_images, 1):
                     if isinstance(image_value, dict):
                         url = image_value.get('url') or image_value.get('secure_url')
                     else:
-                        url = str(image_value)
-                    if url:
+                        url = str(image_value).strip()
+                    
+                    if url and url not in ['None', 'null', '']:
                         images_data.append(url)
-                        print(f"✅ PropertyViewSet: Accepted image URL {idx}: {url}")
+                        print(f"✅ PropertyViewSet: Accepted image URL {idx}: {url[:100]}...")
+                    else:
+                        print(f"⚠️ PropertyViewSet: Skipped invalid image value {idx}: {image_value}")
+            else:
+                print(f"⚠️ PropertyViewSet.perform_create: No images found in serializer.validated_data")
+                print(f"   serializer.validated_data keys: {list(serializer.validated_data.keys())}")
 
             # Handle raw file uploads before saving (web form submissions)
             if hasattr(self.request, 'FILES') and self.request.FILES:
@@ -284,11 +465,12 @@ class PropertyViewSet(viewsets.ModelViewSet):
             
             print(f"✅ PropertyViewSet: Property saved - ID: {property_obj.id}, Title: {property_obj.title}")
             
-            # Create PropertyImage objects with the Cloudinary URLs
+            # CRITICAL: Create PropertyImage objects with the Cloudinary URLs
+            # THIS IS THE MOST IMPORTANT STEP - images MUST be saved to database BEFORE property is finalized
             if images_data:
                 unique_images = list(dict.fromkeys(images_data))
-                print(f"🏠 PropertyViewSet: Creating {len(unique_images)} PropertyImage objects")
-                print(f"🏠 PropertyViewSet: Image URLs received:")
+                print(f"🏠 PropertyViewSet.perform_create: Processing {len(unique_images)} unique image URLs")
+                print(f"🏠 PropertyViewSet.perform_create: Image URLs received:")
                 for idx, url in enumerate(unique_images, 1):
                     print(f"   {idx}. {str(url)[:100]}...")
                 
@@ -296,47 +478,85 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 images_to_create = unique_images[:4]
                 
                 created_count = 0
+                created_image_ids = []
+                
                 for i, image_url in enumerate(images_to_create, 1):
                     try:
-                        # Ensure image_url is a string
+                        # Normalize image URL - extract from dict if needed
                         if isinstance(image_url, dict):
                             image_url = image_url.get('url') or image_url.get('secure_url') or str(image_url)
                         else:
                             image_url = str(image_url).strip()
                         
-                        if not image_url or image_url == 'None' or image_url == 'null' or image_url == '':
-                            print(f"⚠️ PropertyViewSet: Skipping invalid image URL at index {i}: {image_url}")
+                        # Validate URL exists and is not empty
+                        if not image_url or image_url in ['None', 'null', ''] or len(image_url) < 10:
+                            print(f"⚠️ PropertyViewSet.perform_create: Skipping invalid image URL at index {i}: {image_url}")
                             continue
                         
-                        # Verify it's a valid HTTP/HTTPS URL
-                        if not (image_url.startswith('http://') or image_url.startswith('https://')):
-                            print(f"⚠️ PropertyViewSet: Image URL doesn't start with http/https: {image_url[:50]}")
-                            print(f"   This might be a Cloudinary public_id - will try to create anyway")
+                        # CRITICAL: Ensure HTTPS (Cloudinary URLs should be HTTPS)
+                        if image_url.startswith('http://'):
+                            image_url = image_url.replace('http://', 'https://', 1)
                         
-                        # Validate URL format
-                        if len(image_url) < 10:
-                            print(f"⚠️ PropertyViewSet: Image URL too short, skipping: {image_url}")
+                        # CRITICAL: Must be a valid HTTPS URL
+                        if not image_url.startswith('https://'):
+                            print(f"⚠️ PropertyViewSet.perform_create: Invalid URL format (not HTTPS), skipping: {image_url[:50]}...")
                             continue
                         
+                        # CRITICAL: Create PropertyImage object in database
+                        # This MUST happen before property is finalized/returned
                         prop_image = PropertyImage.objects.create(
                             property=property_obj,
-                            image=image_url,
+                            image=image_url,  # Store full Cloudinary HTTPS URL
                             is_primary=(i == 1),
                             order=i
                         )
+                        
+                        # Force immediate save to database
+                        prop_image.save()
+                        
                         created_count += 1
-                        print(f"✅ PropertyViewSet: PropertyImage {i}/{len(images_to_create)} created successfully")
+                        created_image_ids.append(prop_image.id)
+                        
+                        print(f"✅ PropertyViewSet.perform_create: PropertyImage {i}/{len(images_to_create)} CREATED")
                         print(f"   - PropertyImage ID: {prop_image.id}")
                         print(f"   - Property ID: {property_obj.id}")
-                        print(f"   - Image URL: {image_url[:100]}...")
+                        print(f"   - Image URL stored: {image_url[:100]}...")
                         print(f"   - Is Primary: {prop_image.is_primary}")
                         print(f"   - Order: {prop_image.order}")
+                        
                     except Exception as img_error:
-                        print(f"❌ PropertyViewSet: Failed to create PropertyImage {i}: {img_error}")
-                        print(f"   Image URL was: {image_url[:100] if image_url else 'None'}...")
+                        print(f"❌ PropertyViewSet.perform_create: CRITICAL ERROR creating PropertyImage {i}: {img_error}")
                         import traceback
                         traceback.print_exc()
                         continue
+                
+                # CRITICAL: Force database commit and verify images were actually saved
+                from django.db import transaction
+                transaction.commit()
+                
+                # CRITICAL: Query database immediately to verify images exist
+                db_images = list(PropertyImage.objects.filter(property=property_obj).order_by('order', 'created_at'))
+                db_count = len(db_images)
+                
+                print(f"🔍 PropertyViewSet.perform_create: Database verification after commit:")
+                print(f"   - Expected: {created_count} PropertyImage objects")
+                print(f"   - Found in DB: {db_count} PropertyImage objects")
+                
+                if db_count == 0:
+                    print(f"❌ CRITICAL ERROR: Created {created_count} PropertyImage objects but 0 found in database!")
+                    print(f"   This indicates a database transaction issue!")
+                elif db_count < created_count:
+                    print(f"⚠️ WARNING: Created {created_count} PropertyImage objects but only {db_count} found in database!")
+                else:
+                    print(f"✅ SUCCESS: All {db_count} PropertyImage objects verified in database")
+                
+                # Log each image in database
+                for idx, img in enumerate(db_images, 1):
+                    print(f"   DB Image {idx}: ID={img.id}, URL={img.image[:80] if img.image else 'NO URL'}..., primary={img.is_primary}, order={img.order}")
+            else:
+                print(f"⚠️ PropertyViewSet.perform_create: No images_data to create PropertyImage objects")
+                print(f"   images_data is empty or None")
+                print(f"   Property will be created without images")
                 
                 # Verify images were created
                 final_count = PropertyImage.objects.filter(property=property_obj).count()
@@ -365,7 +585,14 @@ class PropertyViewSet(viewsets.ModelViewSet):
             print(f"   Location: {property_obj.city}, {property_obj.country}")
             print(f"   Price: ETB {property_obj.price:,.2f}")
             print(f"   Images: {len(images_data)} uploaded")
+            
+            # Clear all caches to ensure fresh data
             cache.clear()
+            # Also clear specific property detail cache
+            cache.delete(f"property_detail:{property_obj.id}")
+            # Note: Django cache doesn't support pattern-based deletion easily
+            # cache.clear() above should handle all property_list:* keys
+            
             return property_obj
             
         except Exception as e:

@@ -41,7 +41,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class PropertyImageSerializer(serializers.ModelSerializer):
-    """Property image serializer"""
+    """Property image serializer - BULLETPROOF: Always returns image_url"""
     image_url = serializers.SerializerMethodField()
     
     class Meta:
@@ -49,27 +49,50 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'image_url', 'caption', 'is_primary', 'order', 'created_at']
     
     def get_image_url(self, obj):
-        """Get the image URL - either from Cloudinary or direct URL"""
-        if obj.image:
-            # If it's already a URL (starts with http/https), return it directly
-            if isinstance(obj.image, str) and (obj.image.startswith('http://') or obj.image.startswith('https://')):
-                return obj.image
-            # If it's a Cloudinary public_id, generate URL
-            elif isinstance(obj.image, str):
-                try:
-                    from .utils import get_cloudinary_url
-                    return get_cloudinary_url(obj.image)
-                except Exception:
-                    # Fallback: if it's a string but not a URL, try to return it anyway
-                    return obj.image
+        """BULLETPROOF: Always return image URL from image field"""
+        if not obj or not obj.image:
+            return None
+        
+        url = str(obj.image).strip()
+        if not url or url in ['None', 'null', '']:
+            return None
+        
+        # Convert HTTP to HTTPS
+        if url.startswith('http://'):
+            url = url.replace('http://', 'https://', 1)
+        
+        # Return if valid HTTPS URL
+        if url.startswith('https://'):
+            return url
+        
+        # If not a URL, try to generate from public_id (shouldn't happen)
+        if url:
+            try:
+                from .utils import get_cloudinary_url
+                return get_cloudinary_url(url)
+            except:
+                pass
+        
         return None
     
     def to_representation(self, instance):
-        """Ensure image_url is always included in the response"""
+        """BULLETPROOF: image_url ALWAYS equals image field (the Cloudinary URL)"""
         representation = super().to_representation(instance)
-        # Make sure image_url is set - use image field as fallback
-        if not representation.get('image_url') and representation.get('image'):
-            representation['image_url'] = representation['image']
+        
+        # CRITICAL: image_url MUST be set from image field
+        image_field = representation.get('image')
+        
+        if image_field:
+            url = str(image_field).strip()
+            # Convert HTTP to HTTPS
+            if url.startswith('http://'):
+                url = url.replace('http://', 'https://', 1)
+            # Set image_url to image field value
+            representation['image_url'] = url
+        else:
+            # If no image field, ensure image_url is None
+            representation['image_url'] = None
+        
         return representation
 
 class PropertySerializer(serializers.ModelSerializer):
@@ -98,6 +121,7 @@ class PropertySerializer(serializers.ModelSerializer):
 
 class PropertyListSerializer(serializers.ModelSerializer):
     """Simplified property serializer for list views - Ethiopia fields, m² units"""
+    images = PropertyImageSerializer(many=True, read_only=True)
     primary_image = serializers.SerializerMethodField()
     is_favorited = serializers.SerializerMethodField()
     
@@ -106,13 +130,14 @@ class PropertyListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'price', 'property_type', 'listing_type',
             'address', 'city', 'sub_city', 'kebele', 'bedrooms', 'bathrooms',
-            'area_sqm', 'primary_image', 'is_favorited', 'created_at', 'status'
+            'area_sqm', 'images', 'primary_image', 'is_favorited', 'created_at', 'status'
         ]
     
     def get_primary_image(self, obj):
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image:
-            return primary_image.image  # image is a CharField storing Cloudinary URL
+            # Return full PropertyImageSerializer data, not just the raw image field
+            return PropertyImageSerializer(primary_image).data
         return None
     
     def get_is_favorited(self, obj):
@@ -195,10 +220,65 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_primary_image(self, obj):
+        # CRITICAL: Get primary image - must return object with image_url
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image:
-            return PropertyImageSerializer(primary_image).data
+            serialized = PropertyImageSerializer(primary_image).data
+            # Ensure image_url is set
+            if not serialized.get('image_url') and serialized.get('image'):
+                serialized['image_url'] = str(serialized['image']).strip()
+                if serialized['image_url'].startswith('http://'):
+                    serialized['image_url'] = serialized['image_url'].replace('http://', 'https://', 1)
+            return serialized
+        else:
+            # Try to get first image if no primary
+            first_image = obj.images.first()
+            if first_image:
+                serialized = PropertyImageSerializer(first_image).data
+                # Ensure image_url is set
+                if not serialized.get('image_url') and serialized.get('image'):
+                    serialized['image_url'] = str(serialized['image']).strip()
+                    if serialized['image_url'].startswith('http://'):
+                        serialized['image_url'] = serialized['image_url'].replace('http://', 'https://', 1)
+                return serialized
         return None
+    
+    def to_representation(self, instance):
+        """CRITICAL: Ensure images are ALWAYS included with valid image_url"""
+        representation = super().to_representation(instance)
+        
+        # CRITICAL: Query images directly from database to ensure they're included
+        db_images = list(instance.images.all().order_by('order', 'created_at')[:4])
+        images_data = representation.get('images', [])
+        
+        # If serializer didn't include images, add them from database
+        if not images_data or len(images_data) == 0:
+            if db_images:
+                representation['images'] = [PropertyImageSerializer(img).data for img in db_images]
+                print(f"🔍 PropertyDetailSerializer.to_representation: Added {len(db_images)} images from database")
+        
+        # CRITICAL: Ensure every image has image_url set to a valid HTTPS URL
+        if representation.get('images'):
+            for img_data in representation['images']:
+                # Get URL from image_url or image field
+                image_url = img_data.get('image_url')
+                image_field = img_data.get('image')
+                
+                # If image_url is missing, use image field (which contains the Cloudinary URL)
+                if not image_url and image_field:
+                    image_url = str(image_field).strip()
+                
+                if image_url:
+                    # Ensure HTTPS
+                    if image_url.startswith('http://'):
+                        image_url = image_url.replace('http://', 'https://', 1)
+                    # Set image_url
+                    img_data['image_url'] = image_url
+                else:
+                    # If still no URL, this image is invalid
+                    print(f"⚠️ PropertyDetailSerializer: Image {img_data.get('id')} has no valid URL")
+        
+        return representation
     
     def get_is_favorited(self, obj):
         request = self.context.get('request')
