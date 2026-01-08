@@ -67,48 +67,51 @@ except Exception as e:
     traceback.print_exc()
 " 2>&1 || echo "⚠️ Could not verify database connection"
 
-# Populate sample data (only if database is empty or has very few properties)
+# Populate sample data AUTOMATICALLY on every deployment
 # IMPORTANT: This only adds sample data, NEVER deletes user-created properties
 # This runs AFTER database verification to ensure we're using PostgreSQL
 echo ""
-echo "🏠 Checking if sample data population is needed..."
-PROPERTY_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
+echo "🏠 AUTOMATIC SAMPLE DATA POPULATION"
+echo "============================================================"
+echo "🔄 Running populate_sample_data automatically on deployment..."
+echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
+echo ""
 
-echo "📊 Current property count: $PROPERTY_COUNT"
+# Run populate_sample_data with explicit error handling and full output
+echo "📝 Executing: python manage.py populate_sample_data"
+python manage.py populate_sample_data
+EXIT_CODE=$?
 
-# Always try to populate if count is less than 25 (should have ~24 sample properties)
-# This ensures sample data is populated even if some properties exist
-if [ "$PROPERTY_COUNT" -lt "25" ]; then
-    echo "📝 Database has $PROPERTY_COUNT properties. Populating sample data..."
-    echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
-    echo "🔄 Running: python manage.py populate_sample_data"
+echo ""
+echo "============================================================"
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✅ Sample data population command completed successfully"
     
-    # Run populate_sample_data with explicit error handling
-    python manage.py populate_sample_data 2>&1
-    EXIT_CODE=$?
+    # Verify properties were created
+    sleep 3  # Give database a moment to commit all transactions
+    echo "🔍 Verifying properties were created..."
     
-    if [ $EXIT_CODE -eq 0 ]; then
-        echo "✅ Sample data population completed successfully"
-        # Verify properties were created
-        sleep 2  # Give database a moment to commit
-        NEW_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
-        echo "📊 New property count: $NEW_COUNT"
-        
-        if [ "$NEW_COUNT" -eq "$PROPERTY_COUNT" ]; then
-            echo "⚠️ WARNING: Property count did not increase. Sample data may not have been created."
-            echo "⚠️ This could indicate a database connection issue."
-        else
-            echo "✅ Properties successfully created! ($PROPERTY_COUNT → $NEW_COUNT)"
-        fi
+    FINAL_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
+    SAMPLE_COUNT=$(python manage.py shell -c "from listings.models import Property, User; agent = User.objects.filter(username='melaku_agent').first(); print(Property.objects.filter(owner=agent).count() if agent else 0)" 2>/dev/null || echo "0")
+    
+    echo "📊 Final property count: $FINAL_COUNT"
+    echo "📊 Sample properties: $SAMPLE_COUNT"
+    
+    if [ "$SAMPLE_COUNT" -lt "20" ]; then
+        echo "⚠️ WARNING: Only $SAMPLE_COUNT sample properties found. Expected ~24."
+        echo "⚠️ This might indicate an issue. Check logs above for details."
     else
-        echo "❌ Sample data population failed with exit code: $EXIT_CODE"
-        echo "⚠️ Attempting to continue anyway, but sample data may not be available."
-        echo "⚠️ Check the logs above for error details."
+        echo "✅ Sample data population successful! $SAMPLE_COUNT sample properties available."
     fi
 else
-    echo "✅ Database already has $PROPERTY_COUNT properties. Skipping sample data population."
-    echo "✅ User-created properties are preserved and will not be affected."
+    echo "❌ Sample data population failed with exit code: $EXIT_CODE"
+    echo "⚠️ Check the logs above for error details."
+    echo "⚠️ The application will continue, but sample data may not be available."
 fi
+
+echo "============================================================"
+echo ""
 
 # Test welcome email (only on first start or if explicitly needed)
 # Commented out by default to avoid sending test emails on every restart
