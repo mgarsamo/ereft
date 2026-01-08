@@ -49,50 +49,104 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'image_url', 'caption', 'is_primary', 'order', 'created_at']
     
     def get_image_url(self, obj):
-        """BULLETPROOF: Always return image URL from image field"""
+        """BULLETPROOF: Always return image URL - construct from public_id or use stored URL"""
         if not obj or not obj.image:
             return None
         
-        url = str(obj.image).strip()
-        if not url or url in ['None', 'null', '']:
+        image_value = str(obj.image).strip()
+        if not image_value or image_value in ['None', 'null', '']:
             return None
         
-        # Convert HTTP to HTTPS
-        if url.startswith('http://'):
-            url = url.replace('http://', 'https://', 1)
+        # If it's already a full URL (starts with http/https), return it directly
+        if image_value.startswith('http://') or image_value.startswith('https://'):
+            # Convert HTTP to HTTPS
+            if image_value.startswith('http://'):
+                image_value = image_value.replace('http://', 'https://', 1)
+            return image_value
         
-        # Return if valid HTTPS URL
-        if url.startswith('https://'):
-            return url
-        
-        # If not a URL, try to generate from public_id (shouldn't happen)
-        if url:
+        # If it's a public_id (like "ereft_properties/nggejftgnzxzwuitw3wp"), construct the URL
+        # Public IDs don't start with http, they're just identifiers
+        if image_value and not image_value.startswith('http'):
             try:
                 from .utils import get_cloudinary_url
-                return get_cloudinary_url(url)
+                # Construct full Cloudinary URL from public_id
+                cloudinary_url = get_cloudinary_url(image_value)
+                if cloudinary_url:
+                    return cloudinary_url
+            except Exception as e:
+                print(f"⚠️ PropertyImageSerializer: Failed to construct URL from public_id '{image_value}': {e}")
+        
+        # Fallback: try to construct URL manually using public_id
+        if image_value and '/' in image_value:  # Likely a public_id
+            try:
+                from django.conf import settings
+                cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                # Construct secure URL: https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}.{format}
+                # Since we don't know the format, try common ones or just use the public_id
+                url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{image_value}"
+                return url
             except:
                 pass
         
         return None
     
     def to_representation(self, instance):
-        """BULLETPROOF: image_url ALWAYS equals image field (the Cloudinary URL)"""
+        """BULLETPROOF: Always construct full URL from public_id stored in image field"""
         representation = super().to_representation(instance)
         
-        # CRITICAL: image_url MUST be set from image field
+        # CRITICAL: image field contains public_id (e.g., "ereft_properties/nggejftgnzxzwuitw3wp")
+        # We need to construct the full Cloudinary URL from it
         image_field = representation.get('image')
+        image_url = representation.get('image_url')
         
+        # If image_url is already set by get_image_url(), use it
+        if image_url and image_url.startswith('https://'):
+            representation['image_url'] = image_url
+            return representation
+        
+        # Otherwise, construct from image field (public_id)
         if image_field:
-            url = str(image_field).strip()
-            # Convert HTTP to HTTPS
-            if url.startswith('http://'):
-                url = url.replace('http://', 'https://', 1)
-            # Set image_url to image field value
-            representation['image_url'] = url
-        else:
-            # If no image field, ensure image_url is None
-            representation['image_url'] = None
+            public_id = str(image_field).strip()
+            
+            # If it's already a full URL, use it directly
+            if public_id.startswith('http://') or public_id.startswith('https://'):
+                if public_id.startswith('http://'):
+                    public_id = public_id.replace('http://', 'https://', 1)
+                representation['image_url'] = public_id
+                return representation
+            
+            # It's a public_id - construct full Cloudinary URL
+            # public_id format: "ereft_properties/nggejftgnzxzwuitw3wp"
+            try:
+                from .utils import get_cloudinary_url
+                from django.conf import settings
+                
+                # Try to use get_cloudinary_url which uses Cloudinary SDK
+                full_url = get_cloudinary_url(public_id)
+                
+                if full_url:
+                    representation['image_url'] = full_url
+                    print(f"✅ PropertyImageSerializer: Constructed URL from public_id '{public_id}': {full_url[:80]}...")
+                    return representation
+            except Exception as e:
+                print(f"⚠️ PropertyImageSerializer: Failed to use get_cloudinary_url: {e}")
+            
+            # Fallback: Construct URL manually
+            try:
+                from django.conf import settings
+                cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                # Construct: https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}
+                # Cloudinary will auto-detect format, but we can try common formats
+                # Since public_id might not include extension, Cloudinary will handle it
+                full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                representation['image_url'] = full_url
+                print(f"✅ PropertyImageSerializer: Constructed URL manually from public_id '{public_id}'")
+                return representation
+            except Exception as e:
+                print(f"⚠️ PropertyImageSerializer: Failed to construct URL manually: {e}")
         
+        # If all else fails, ensure image_url is set (even if None)
+        representation['image_url'] = image_url if image_url else None
         return representation
 
 class PropertySerializer(serializers.ModelSerializer):

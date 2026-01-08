@@ -683,20 +683,51 @@ class PropertyViewSet(viewsets.ModelViewSet):
                             print(f"⚠️ PropertyViewSet.perform_create: Skipping invalid image URL at index {i}: {image_url}")
                             continue
                         
-                        # CRITICAL: Ensure HTTPS (Cloudinary URLs should be HTTPS)
-                        if image_url.startswith('http://'):
-                            image_url = image_url.replace('http://', 'https://', 1)
+                        # CRITICAL: Store public_id, not full URL
+                        # Public IDs look like: "ereft_properties/nggejftgnzxzwuitw3wp"
+                        # We'll construct the full URL when needed in the serializer
                         
-                        # CRITICAL: Must be a valid HTTPS URL
-                        if not image_url.startswith('https://'):
-                            print(f"⚠️ PropertyViewSet.perform_create: Invalid URL format (not HTTPS), skipping: {image_url[:50]}...")
+                        # If it's already a full URL, extract the public_id
+                        # Cloudinary URLs format: https://res.cloudinary.com/{cloud}/image/upload/{public_id}.{ext}
+                        public_id = image_url
+                        
+                        # Check if it's a full URL - if so, extract public_id
+                        if image_url.startswith('http://') or image_url.startswith('https://'):
+                            # Try to extract public_id from URL
+                            # Format: https://res.cloudinary.com/{cloud}/image/upload/{public_id}.{ext}
+                            if '/image/upload/' in image_url:
+                                parts = image_url.split('/image/upload/')
+                                if len(parts) > 1:
+                                    # Get everything after /image/upload/
+                                    path_part = parts[1]
+                                    # Remove file extension and any transformations
+                                    # Format: v1234567/{public_id}.{ext} or just {public_id}.{ext}
+                                    if '/' in path_part:
+                                        # Has version or transformation
+                                        public_id = path_part.split('/')[-1]  # Get last part
+                                    else:
+                                        public_id = path_part
+                                    # Remove file extension
+                                    if '.' in public_id:
+                                        public_id = public_id.rsplit('.', 1)[0]
+                                    print(f"   Extracted public_id '{public_id}' from URL")
+                            else:
+                                # Keep as-is if we can't extract
+                                print(f"   ⚠️ Could not extract public_id from URL, storing as-is: {image_url[:50]}...")
+                                public_id = image_url
+                        
+                        # Validate public_id format (should contain / for folder structure)
+                        # Expected: "ereft_properties/xxxxx"
+                        if not public_id or len(public_id) < 5:
+                            print(f"⚠️ PropertyViewSet.perform_create: Invalid public_id, skipping: {public_id}")
                             continue
                         
                         # CRITICAL: Create PropertyImage object in database
-                        # This MUST happen before property is finalized/returned
+                        # Store public_id (like "ereft_properties/nggejftgnzxzwuitw3wp")
+                        # Serializer will construct full URL when needed
                         prop_image = PropertyImage.objects.create(
                             property=property_obj,
-                            image=image_url,  # Store full Cloudinary HTTPS URL
+                            image=public_id,  # Store public_id, not full URL
                             is_primary=(i == 1),
                             order=i
                         )
