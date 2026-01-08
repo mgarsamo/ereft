@@ -1350,6 +1350,35 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=['post'])
+    def toggle_featured(self, request, pk=None):
+        """Toggle featured status for a property - Admin only"""
+        property_obj = self.get_object()
+        user = request.user
+        
+        # Check if user is admin
+        is_admin = user.is_staff or user.is_superuser or user.email in ['admin@ereft.com', 'melaku.garsamo@gmail.com']
+        
+        if not is_admin:
+            return Response(
+                {'detail': 'Only administrators can feature properties.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Toggle featured status
+        property_obj.is_featured = not property_obj.is_featured
+        property_obj.save()
+        
+        # Clear cache
+        cache.delete(f"property_detail:{property_obj.pk}")
+        cache.clear()
+        
+        status_text = 'featured' if property_obj.is_featured else 'unfeatured'
+        return Response({
+            'status': f'Property {status_text}',
+            'is_featured': property_obj.is_featured
+        })
+
     @action(detail=False, methods=['get'])
     def featured(self, request):
         """Get featured properties"""
