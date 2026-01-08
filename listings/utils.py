@@ -67,13 +67,20 @@ def send_property_inquiry_email(contact):
 def send_welcome_email(user, is_new_user=False, test_email=None):
     """
     Send welcome email to new users using SendGrid
-    Only sends once per user (for new users)
+    Only sends once per user
     """
     try:
-        # Send welcome email to all users (new and existing)
-        # if not is_new_user:
-        #     print(f"ℹ️ Welcome email skipped for {user.email} (existing user)")
-        #     return False
+        # Check if welcome email was already sent by checking user's date_joined
+        # Only send if user was created in the last 5 minutes (new registration)
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        time_since_joined = timezone.now() - user.date_joined
+        is_recently_created = time_since_joined < timedelta(minutes=5)
+        
+        if not is_recently_created and not is_new_user:
+            print(f"ℹ️ Welcome email skipped for {user.email} (not a new user)")
+            return False
         
         # Use test email if provided, otherwise use user's email
         recipient_email = test_email if test_email else user.email

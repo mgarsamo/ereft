@@ -2266,13 +2266,8 @@ def process_google_oauth_code(code, request):
                 profile.google_id = google_id or profile.google_id
                 profile.save()
             
-            # Send welcome email for existing users on OAuth login
-            try:
-                from .utils import send_welcome_email
-                send_welcome_email(user, is_new_user=False)
-                print(f"🔐 Google OAuth: Welcome email sent to {email} on login")
-            except Exception as e:
-                print(f"🔐 Google OAuth: Failed to send welcome email: {str(e)}")
+            # Skip welcome email for existing users on OAuth login (only send for new users)
+            print(f"🔐 Google OAuth: Welcome email skipped for {email} (existing user)")
         
         if not user:
             # Create new user
@@ -2309,7 +2304,7 @@ def process_google_oauth_code(code, request):
                 google_id=google_id
             )
             
-            # Send welcome email for new Google OAuth users (only once)
+            # Send welcome email for new Google OAuth users (only once - user was just created)
             try:
                 from .utils import send_welcome_email
                 send_welcome_email(user, is_new_user=True)
