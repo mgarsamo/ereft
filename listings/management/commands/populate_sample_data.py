@@ -685,6 +685,8 @@ class Command(BaseCommand):
             if area:
                 prop_payload['price_per_sqm'] = (prop_payload['price'] / Decimal(area)).quantize(Decimal('0.01'))
 
+            # Use get_or_create with title to avoid duplicates
+            # This ensures we never overwrite user-created properties
             property_obj, created = Property.objects.get_or_create(
                 title=prop_payload['title'],
                 defaults={**prop_payload, 'owner': agent_user, 'is_published': True, 'is_active': True},
