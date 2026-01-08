@@ -464,18 +464,25 @@ import cloudinary.uploader
 import cloudinary.api
 
 # Configure Cloudinary
+cloudinary_cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+cloudinary_api_key = os.environ.get('CLOUDINARY_API_KEY', '935983952526243')
+cloudinary_api_secret = os.environ.get('CLOUDINARY_API_SECRET', 'ZbaIe1eVXx0wdL3XYhDjExCfQb8')
+
 cloudinary.config(
-    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME', 'detdm1snc'),
-    api_key=os.environ.get('CLOUDINARY_API_KEY', '935983952526243'),
-    api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'ZbaIe1eVXx0wdL3XYhDjExCfQb8'),
+    cloud_name=cloudinary_cloud_name,
+    api_key=cloudinary_api_key,
+    api_secret=cloudinary_api_secret,
     secure=True
 )
 
+# Log Cloudinary configuration (without exposing secrets)
+print(f"☁️ Cloudinary configured: cloud_name={cloudinary_cloud_name}, api_key={'✅' if cloudinary_api_key else '❌'}, api_secret={'✅' if cloudinary_api_secret else '❌'}")
+
 # Cloudinary environment variables
-CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', 'detdm1snc')
-CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '935983952526243')
-CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', 'ZbaIe1eVXx0wdL3XYhDjExCfQb8')
-CLOUDINARY_UPLOAD_PRESET = os.environ.get('CLOUDINARY_UPLOAD_PRESET', 'ereft')
+CLOUDINARY_CLOUD_NAME = cloudinary_cloud_name
+CLOUDINARY_API_KEY = cloudinary_api_key
+CLOUDINARY_API_SECRET = cloudinary_api_secret
+CLOUDINARY_UPLOAD_PRESET = os.environ.get('CLOUDINARY_UPLOAD_PRESET', 'ereft_unsigned')
 
 # Cloudinary settings
 CLOUDINARY = {
