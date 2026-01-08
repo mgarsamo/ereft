@@ -70,10 +70,10 @@ def send_welcome_email(user, is_new_user=False, test_email=None):
     Only sends once per user (for new users)
     """
     try:
-        # Only send welcome email for new users
-        if not is_new_user:
-            print(f"ℹ️ Welcome email skipped for {user.email} (existing user)")
-            return False
+        # Send welcome email to all users (new and existing)
+        # if not is_new_user:
+        #     print(f"ℹ️ Welcome email skipped for {user.email} (existing user)")
+        #     return False
         
         # Use test email if provided, otherwise use user's email
         recipient_email = test_email if test_email else user.email
