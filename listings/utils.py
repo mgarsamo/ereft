@@ -515,17 +515,39 @@ def handle_property_image_upload(image_file, property_id):
         dict: Image data with Cloudinary URL and metadata, or None if upload fails
     """
     try:
-        # Check if Cloudinary is configured
-        from django.conf import settings
-        cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', None)
-        api_key = getattr(settings, 'CLOUDINARY_API_KEY', None)
-        api_secret = getattr(settings, 'CLOUDINARY_API_SECRET', None)
-        
-        if not all([cloud_name, api_key, api_secret]):
-            print(f"⚠️ Cloudinary not configured - skipping image upload")
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+        if hasattr(image_file, 'content_type') and image_file.content_type not in allowed_types:
+            print(f"⚠️ Invalid image type: {image_file.content_type}. Allowed: {', '.join(allowed_types)}")
             return None
         
-        # Upload to Cloudinary
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB in bytes
+        if hasattr(image_file, 'size') and image_file.size > max_size:
+            print(f"⚠️ Image too large: {image_file.size} bytes. Max size: {max_size} bytes")
+            return None
+        
+        # Check if Cloudinary is configured
+        from django.conf import settings
+        cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', None) or os.environ.get('CLOUDINARY_CLOUD_NAME')
+        api_key = getattr(settings, 'CLOUDINARY_API_KEY', None) or os.environ.get('CLOUDINARY_API_KEY')
+        api_secret = getattr(settings, 'CLOUDINARY_API_SECRET', None) or os.environ.get('CLOUDINARY_API_SECRET')
+        
+        if not all([cloud_name, api_key, api_secret]):
+            print(f"⚠️ Cloudinary not configured - missing credentials")
+            print(f"   CLOUDINARY_CLOUD_NAME: {'✅' if cloud_name else '❌'}")
+            print(f"   CLOUDINARY_API_KEY: {'✅' if api_key else '❌'}")
+            print(f"   CLOUDINARY_API_SECRET: {'✅' if api_secret else '❌'}")
+            return None
+        
+        # Ensure Cloudinary is configured
+        cloudinary.config(
+            cloud_name=cloud_name,
+            api_key=api_key,
+            api_secret=api_secret
+        )
+        
+        # Upload to Cloudinary with optimized settings
         result = cloudinary.uploader.upload(
             image_file,
             folder=f"ereft_properties/{property_id}",
@@ -533,21 +555,36 @@ def handle_property_image_upload(image_file, property_id):
             transformation=[
                 {"width": 1200, "height": 800, "crop": "limit"},
                 {"quality": "auto:good", "fetch_format": "auto"}
+            ],
+            eager=[
+                {"width": 800, "height": 600, "crop": "limit"},
+                {"width": 400, "height": 300, "crop": "limit"}
             ]
         )
+        
+        print(f"✅ Image uploaded successfully to Cloudinary: {result.get('public_id', 'unknown')}")
+        print(f"   URL: {result.get('secure_url', 'N/A')}")
+        print(f"   Size: {result.get('bytes', 0)} bytes")
         
         # Return formatted image data
         return {
             'public_id': result['public_id'],
             'url': result['secure_url'],
-            'width': result['width'],
-            'height': result['height'],
-            'format': result['format'],
-            'size': result['bytes']
+            'width': result.get('width', 0),
+            'height': result.get('height', 0),
+            'format': result.get('format', 'unknown'),
+            'size': result.get('bytes', 0)
         }
         
+    except cloudinary.exceptions.Error as e:
+        print(f"❌ Cloudinary error: {str(e)}")
+        print(f"   Property creation will continue without this image")
+        return None
     except Exception as e:
-        print(f"⚠️ Error handling property image upload: {str(e)}")
+        print(f"❌ Error handling property image upload: {str(e)}")
+        print(f"   Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         print(f"   Property creation will continue without this image")
         # Return None instead of raising - allow property creation without images
         return None
