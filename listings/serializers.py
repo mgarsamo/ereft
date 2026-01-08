@@ -51,14 +51,26 @@ class PropertyImageSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         """Get the image URL - either from Cloudinary or direct URL"""
         if obj.image:
-            # If it's already a URL, return it
-            if obj.image.startswith('http'):
+            # If it's already a URL (starts with http/https), return it directly
+            if isinstance(obj.image, str) and (obj.image.startswith('http://') or obj.image.startswith('https://')):
                 return obj.image
             # If it's a Cloudinary public_id, generate URL
-            else:
-                from .utils import get_cloudinary_url
-                return get_cloudinary_url(obj.image)
+            elif isinstance(obj.image, str):
+                try:
+                    from .utils import get_cloudinary_url
+                    return get_cloudinary_url(obj.image)
+                except Exception:
+                    # Fallback: if it's a string but not a URL, try to return it anyway
+                    return obj.image
         return None
+    
+    def to_representation(self, instance):
+        """Ensure image_url is always included in the response"""
+        representation = super().to_representation(instance)
+        # Make sure image_url is set - use image field as fallback
+        if not representation.get('image_url') and representation.get('image'):
+            representation['image_url'] = representation['image']
+        return representation
 
 class PropertySerializer(serializers.ModelSerializer):
     """Property serializer with nested images"""
