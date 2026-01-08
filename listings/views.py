@@ -311,19 +311,20 @@ class PropertyViewSet(viewsets.ModelViewSet):
         print(f"🔍 PropertyViewSet.create: Verifying images for property {property_obj.id}")
         print(f"   - Database has {len(db_images)} PropertyImage objects")
         
-        # CRITICAL: If no images in database but we have validated URLs, create them NOW as fallback
+        # CRITICAL: If no images in database but we have validated public_ids, create them NOW as fallback
         if not db_images and validated_image_urls:
-            print(f"⚠️ CRITICAL: No images in database but we have {len(validated_image_urls)} validated URLs!")
+            print(f"⚠️ CRITICAL: No images in database but we have {len(validated_image_urls)} validated public_ids!")
             print(f"   Creating PropertyImage objects as fallback...")
-            for idx, url in enumerate(validated_image_urls[:4], 1):
+            for idx, public_id in enumerate(validated_image_urls[:4], 1):
                 try:
+                    # Store public_id directly (e.g., "ereft_properties/nggejftgnzxzwuitw3wp")
                     prop_image = PropertyImage.objects.create(
                         property=property_obj,
-                        image=url,
+                        image=public_id,  # Store public_id string
                         is_primary=(idx == 1),
                         order=idx
                     )
-                    print(f"   ✅ Fallback PropertyImage {idx} created: ID={prop_image.id}, URL={url[:80]}...")
+                    print(f"   ✅ Fallback PropertyImage {idx} created: ID={prop_image.id}, public_id={public_id[:50]}...")
                     db_images.append(prop_image)
                 except Exception as e:
                     print(f"   ❌ Failed to create fallback PropertyImage {idx}: {e}")
@@ -336,11 +337,12 @@ class PropertyViewSet(viewsets.ModelViewSet):
         
         if db_images:
             for idx, img in enumerate(db_images, 1):
-                print(f"   DB Image {idx}: ID={img.id}, URL={img.image[:80] if img.image else 'NO URL'}..., primary={img.is_primary}, order={img.order}")
+                public_id = img.image[:80] if img.image else 'NO public_id'
+                print(f"   DB Image {idx}: ID={img.id}, public_id={public_id}..., primary={img.is_primary}, order={img.order}")
         else:
             print(f"   ❌ NO IMAGES IN DATABASE for property {property_obj.id}!")
             if validated_image_urls:
-                print(f"   ⚠️ WARNING: We had {len(validated_image_urls)} validated URLs but no images in database!")
+                print(f"   ⚠️ WARNING: We had {len(validated_image_urls)} validated public_ids but no images in database!")
                 print(f"   This indicates a critical issue with PropertyImage creation!")
 
         # Serialize property with images
@@ -382,29 +384,49 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 response_data['images'].append(img_obj)
                 print(f"   ✅ Response Image {idx}: image_url={url[:80]}...")
         
-        # CRITICAL: Ensure every image has image_url set to a valid HTTPS URL
+        # CRITICAL: Ensure every image has image_url constructed from public_id
         if response_data.get('images'):
             for idx, img_data in enumerate(response_data['images'], 1):
-                # Get image URL - prefer image_url, fallback to image field
+                # Get image URL - prefer image_url (already constructed by serializer), fallback to constructing from image field (public_id)
                 image_url = img_data.get('image_url')
-                image_field = img_data.get('image')
+                image_field = img_data.get('image')  # This should be public_id like "ereft_properties/nggejftgnzxzwuitw3wp"
                 
                 if not image_url and image_field:
-                    # Use image field as image_url
-                    image_url = str(image_field).strip()
+                    # image_field contains public_id - construct full URL
+                    public_id = str(image_field).strip()
+                    
+                    # If it's already a full URL (shouldn't happen but handle it)
+                    if public_id.startswith('http://') or public_id.startswith('https://'):
+                        if public_id.startswith('http://'):
+                            public_id = public_id.replace('http://', 'https://', 1)
+                        image_url = public_id
+                    else:
+                        # It's a public_id - construct full Cloudinary URL
+                        try:
+                            from .utils import get_cloudinary_url
+                            from django.conf import settings
+                            
+                            full_url = get_cloudinary_url(public_id)
+                            if full_url:
+                                image_url = full_url
+                            else:
+                                # Fallback: construct manually
+                                cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                image_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                        except Exception as e:
+                            # Fallback: construct manually
+                            from django.conf import settings
+                            cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                            image_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                            print(f"⚠️ PropertyViewSet.create: Used fallback URL construction for image {idx}: {e}")
                 
                 if image_url:
-                    # Ensure HTTPS
-                    if image_url.startswith('http://'):
-                        image_url = image_url.replace('http://', 'https://', 1)
-                    # Set image_url
+                    # Set image_url (constructed from public_id)
                     img_data['image_url'] = image_url
-                    # Also ensure image field is set
-                    if not img_data.get('image'):
-                        img_data['image'] = image_url
-                    print(f"   ✅ Response Image {idx}: image_url={image_url[:80]}...")
+                    # Keep image field as public_id (don't overwrite it)
+                    print(f"   ✅ Response Image {idx}: public_id={image_field[:50] if image_field else 'None'}, image_url={image_url[:80]}...")
                 else:
-                    print(f"   ❌ Response Image {idx}: NO URL available!")
+                    print(f"   ❌ Response Image {idx}: NO URL available! public_id={image_field if image_field else 'None'}")
                     # Remove invalid images from response
                     response_data['images'] = [img for img in response_data['images'] if img.get('image_url') or img.get('image')]
         
@@ -479,14 +501,36 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     print(f"⚠️ Response missing images! Adding {len(db_images)} from database")
                     response_data['images'] = [PropertyImageSerializer(img).data for img in db_images]
             
-            # CRITICAL: Ensure each image has image_url
+            # CRITICAL: Ensure each image has image_url constructed from public_id
             if response_data.get('images'):
                 for img_data in response_data['images']:
                     if not img_data.get('image_url') and img_data.get('image'):
-                        url = str(img_data['image']).strip()
-                        if url.startswith('http://'):
-                            url = url.replace('http://', 'https://', 1)
-                        img_data['image_url'] = url
+                        public_id = str(img_data['image']).strip()
+                        
+                        # If it's already a full URL, use it
+                        if public_id.startswith('http://') or public_id.startswith('https://'):
+                            if public_id.startswith('http://'):
+                                public_id = public_id.replace('http://', 'https://', 1)
+                            img_data['image_url'] = public_id
+                        else:
+                            # It's a public_id - construct full URL
+                            try:
+                                from .utils import get_cloudinary_url
+                                from django.conf import settings
+                                
+                                full_url = get_cloudinary_url(public_id)
+                                if full_url:
+                                    img_data['image_url'] = full_url
+                                else:
+                                    # Fallback: construct manually
+                                    cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                    img_data['image_url'] = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                            except Exception as e:
+                                # Fallback: construct manually
+                                from django.conf import settings
+                                cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                img_data['image_url'] = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                                print(f"⚠️ PropertyViewSet.retrieve: Used fallback URL construction: {e}")
             
             # Update response with corrected data
             response.data = response_data
