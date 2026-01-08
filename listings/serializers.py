@@ -203,9 +203,56 @@ class PropertyListSerializer(serializers.ModelSerializer):
 class PropertyCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating properties - Ethiopia fields, m² units"""
     images = serializers.ListField(
-        child=serializers.CharField(),
-        required=False
+        child=serializers.CharField(allow_blank=False, allow_null=False),
+        required=False,
+        allow_empty=True,
+        allow_null=True
     )
+    
+    def validate_images(self, value):
+        """CRITICAL: Validate images are all strings before processing"""
+        print(f"🔍 PropertyCreateSerializer.validate_images: Called with value type={type(value)}")
+        if not value:
+            print(f"   Value is empty/None, returning []")
+            return []
+        
+        if not isinstance(value, list):
+            print(f"   ⚠️ Value is not a list! Type: {type(value)}, converting...")
+            value = [value] if value else []
+        
+        validated_images = []
+        for idx, item in enumerate(value):
+            print(f"   Validating image {idx}: type={type(item).__name__}, value={str(item)[:50] if item else 'None'}...")
+            
+            # CRITICAL: Ensure it's a string
+            if isinstance(item, str):
+                item_str = item.strip()
+                if item_str and len(item_str) > 5:
+                    validated_images.append(item_str)
+                    print(f"   ✅ Image {idx}: Valid string '{item_str[:50]}...'")
+                else:
+                    print(f"   ⚠️ Image {idx}: String too short or empty, skipping")
+            elif item is None:
+                print(f"   ⚠️ Image {idx}: None, skipping")
+                continue
+            elif hasattr(item, 'read'):  # File-like
+                print(f"   ❌ Image {idx}: File-like object, skipping")
+                continue
+            else:
+                # Try to convert to string
+                try:
+                    item_str = str(item).strip()
+                    if item_str and len(item_str) > 5 and item_str not in ['None', 'null', '']:
+                        validated_images.append(item_str)
+                        print(f"   ✅ Image {idx}: Converted to string '{item_str[:50]}...'")
+                    else:
+                        print(f"   ⚠️ Image {idx}: Empty or invalid after conversion, skipping")
+                except Exception as e:
+                    print(f"   ❌ Image {idx}: Cannot convert to string: {e}, skipping")
+                    continue
+        
+        print(f"✅ PropertyCreateSerializer.validate_images: Returning {len(validated_images)} validated images")
+        return validated_images
     
     class Meta:
         model = Property
