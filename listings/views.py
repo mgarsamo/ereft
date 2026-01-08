@@ -91,17 +91,21 @@ class PropertyViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Create a property and return the full detail payload including generated ID."""
-        # Remove 'images' from request.data if files are being uploaded
+        # Handle multipart form data (file uploads)
         # The serializer expects image URLs (strings), but we handle file uploads in perform_create
         data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
         
         # If images are being uploaded as files, remove them from serializer data
         # They will be handled in perform_create via request.FILES
-        if hasattr(request, 'FILES') and 'images' in request.FILES:
-            # Remove images from data to avoid serializer validation error
-            # Files are handled separately in perform_create
-            if 'images' in data:
-                data.pop('images', None)
+        # This prevents validation errors since serializer expects strings, not File objects
+        if hasattr(request, 'FILES') and request.FILES:
+            # Check if 'images' key exists in FILES (multiple files uploaded)
+            if 'images' in request.FILES:
+                # Remove images from data dict to avoid serializer validation error
+                # Files are handled separately in perform_create via request.FILES
+                if 'images' in data:
+                    data.pop('images', None)
+                print(f"🏠 PropertyViewSet: Detected {len(request.FILES.getlist('images'))} image files in request.FILES")
         
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -192,27 +196,40 @@ class PropertyViewSet(viewsets.ModelViewSet):
                         print(f"✅ PropertyViewSet: Accepted image URL {idx}: {url}")
 
             # Handle raw file uploads before saving (web form submissions)
-            if hasattr(self.request, 'FILES') and 'images' in self.request.FILES:
-                image_files = self.request.FILES.getlist('images')
-                image_count = len(image_files)
-                print(f"🏠 PropertyViewSet: Processing {image_count} images")
-                
-                for idx, image_file in enumerate(image_files, 1):
-                    try:
-                        from .utils import handle_property_image_upload
-                        temp_id = str(serializer.validated_data.get('title', 'temp'))[:20]
-                        image_result = handle_property_image_upload(image_file, temp_id)
-                        
-                        # Only add if upload was successful (returns dict with 'url')
-                        if image_result and isinstance(image_result, dict) and 'url' in image_result:
-                            images_data.append(image_result['url'])
-                            print(f"✅ PropertyViewSet: Image {idx}/{image_count} uploaded: {image_result['url']}")
-                        else:
-                            print(f"⚠️ PropertyViewSet: Image {idx}/{image_count} upload skipped (Cloudinary not configured or failed)")
-                    except Exception as img_error:
-                        print(f"⚠️ PropertyViewSet: Failed to upload image {idx}: {img_error}")
-                        print(f"   Property creation will continue without this image")
-                        continue
+            if hasattr(self.request, 'FILES') and self.request.FILES:
+                # Check for 'images' key (multiple files)
+                if 'images' in self.request.FILES:
+                    image_files = self.request.FILES.getlist('images')
+                    # Limit to 4 images maximum
+                    image_files = image_files[:4]
+                    image_count = len(image_files)
+                    print(f"🏠 PropertyViewSet: Processing {image_count} image files from request.FILES")
+                    
+                    for idx, image_file in enumerate(image_files, 1):
+                        try:
+                            from .utils import handle_property_image_upload
+                            # Use property title or a temp identifier for folder organization
+                            temp_id = str(serializer.validated_data.get('title', 'temp'))[:20].replace(' ', '_')
+                            print(f"🏠 PropertyViewSet: Uploading image {idx}/{image_count}: {image_file.name} ({image_file.size} bytes)")
+                            
+                            image_result = handle_property_image_upload(image_file, temp_id)
+                            
+                            # Only add if upload was successful (returns dict with 'url')
+                            if image_result and isinstance(image_result, dict) and 'url' in image_result:
+                                image_url = image_result['url']
+                                images_data.append(image_url)
+                                print(f"✅ PropertyViewSet: Image {idx}/{image_count} uploaded successfully: {image_url}")
+                            else:
+                                print(f"⚠️ PropertyViewSet: Image {idx}/{image_count} upload failed or skipped")
+                                print(f"   Image result: {image_result}")
+                        except Exception as img_error:
+                            print(f"❌ PropertyViewSet: Failed to upload image {idx}: {img_error}")
+                            import traceback
+                            traceback.print_exc()
+                            print(f"   Property creation will continue without this image")
+                            continue
+                else:
+                    print(f"ℹ️ PropertyViewSet: request.FILES exists but 'images' key not found. Available keys: {list(self.request.FILES.keys())}")
             
             # Get or create the default listing agent (Chilot Garsamo)
             from django.contrib.auth.models import User
