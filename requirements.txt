@@ -14,3 +14,4 @@ python-decouple==3.8
 twilio==8.10.0
 django-email-verification==0.3.3
 django-ratelimit==4.1.0
+psycopg2-binary>=2.9.0
