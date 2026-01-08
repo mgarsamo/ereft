@@ -13,24 +13,27 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         try:
-            # Get or create a test user
-            test_user, created = User.objects.get_or_create(
-                email='melaku.garsamo@gmail.com',
-                defaults={
-                    'username': 'test_user',
-                    'first_name': 'Melaku',
-                    'is_active': True,
-                }
-            )
+            # Get test user - handle case where multiple users might have the same email
+            test_email = 'admin@ereft.com'
+            test_user = User.objects.filter(email=test_email).first()
             
-            if not test_user.first_name:
-                test_user.first_name = 'Melaku'
-                test_user.save()
+            if not test_user:
+                # Create new user if none exists
+                test_user = User.objects.create_user(
+                    username='admin_test',
+                    email=test_email,
+                    first_name='Admin',
+                    last_name='Test',
+                    password='testpassword123'
+                )
+                self.stdout.write(f'✅ Created test user: {test_user.email}')
+            else:
+                self.stdout.write(f'✅ Using existing user: {test_user.email} (ID: {test_user.id})')
             
             self.stdout.write(self.style.SUCCESS(f'📧 Sending test welcome email to {test_user.email}...'))
             
             # Send test welcome email
-            result = send_welcome_email(test_user, is_new_user=True, test_email='melaku.garsamo@gmail.com')
+            result = send_welcome_email(test_user, is_new_user=True, test_email='admin@ereft.com')
             
             if result:
                 self.stdout.write(self.style.SUCCESS('✅ Test welcome email sent successfully!'))
