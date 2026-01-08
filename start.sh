@@ -14,28 +14,8 @@ python manage.py migrate --noinput
 echo "📦 Collecting static files..."
 python manage.py collectstatic --noinput
 
-# Populate sample data (only if database is empty or has very few properties)
-# IMPORTANT: This only adds sample data, NEVER deletes user-created properties
-echo "🏠 Checking if sample data population is needed..."
-PROPERTY_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
-
-echo "📊 Current property count: $PROPERTY_COUNT"
-
-if [ "$PROPERTY_COUNT" -lt "5" ]; then
-    echo "📝 Database has $PROPERTY_COUNT properties. Populating sample data..."
-    echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
-    python manage.py populate_sample_data
-    if [ $? -eq 0 ]; then
-        echo "✅ Sample data population completed successfully"
-    else
-        echo "⚠️ Sample data population had errors, but continuing..."
-    fi
-else
-    echo "✅ Database already has $PROPERTY_COUNT properties. Skipping sample data population."
-    echo "✅ User-created properties are preserved and will not be affected."
-fi
-
 # CRITICAL: Verify database connection and ensure PostgreSQL is being used
+# Do this BEFORE populating data to ensure we're using the right database
 echo "🔍 Verifying database connection and persistence..."
 python manage.py shell -c "
 import os
@@ -86,6 +66,35 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 " 2>&1 || echo "⚠️ Could not verify database connection"
+
+# Populate sample data (only if database is empty or has very few properties)
+# IMPORTANT: This only adds sample data, NEVER deletes user-created properties
+# This runs AFTER database verification to ensure we're using PostgreSQL
+echo ""
+echo "🏠 Checking if sample data population is needed..."
+PROPERTY_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
+
+echo "📊 Current property count: $PROPERTY_COUNT"
+
+if [ "$PROPERTY_COUNT" -lt "5" ]; then
+    echo "📝 Database has $PROPERTY_COUNT properties. Populating sample data..."
+    echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
+    echo "🔄 Running: python manage.py populate_sample_data"
+    python manage.py populate_sample_data
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "✅ Sample data population completed successfully"
+        # Verify properties were created
+        NEW_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
+        echo "📊 New property count: $NEW_COUNT"
+    else
+        echo "⚠️ Sample data population had errors (exit code: $EXIT_CODE), but continuing..."
+        echo "⚠️ This might mean sample data was not populated. Check logs above for details."
+    fi
+else
+    echo "✅ Database already has $PROPERTY_COUNT properties. Skipping sample data population."
+    echo "✅ User-created properties are preserved and will not be affected."
+fi
 
 # Test welcome email (only on first start or if explicitly needed)
 # Commented out by default to avoid sending test emails on every restart
