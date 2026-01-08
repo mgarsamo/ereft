@@ -173,7 +173,47 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         
         # Otherwise, construct from image field (public_id)
         if image_field:
+            # CRITICAL FIX: Extract public_id from list representation if stored incorrectly
+            import re
+            import ast
+            import json
+            
             public_id = str(image_field).strip()
+            
+            # Try to extract public_id from list representation (e.g., "['ereft_properties/xxx']")
+            if public_id.startswith('[') and public_id.endswith(']'):
+                print(f"   ⚠️ WARNING: image_field appears to be a list representation: '{public_id}'")
+                try:
+                    # Try to parse as Python list literal
+                    parsed_list = ast.literal_eval(public_id)
+                    if isinstance(parsed_list, list) and len(parsed_list) > 0:
+                        public_id = str(parsed_list[0]).strip().strip("'\"")
+                        print(f"   ✅ Extracted public_id from list: '{public_id}'")
+                except (ValueError, SyntaxError):
+                    try:
+                        # Try to parse as JSON
+                        parsed_list = json.loads(public_id)
+                        if isinstance(parsed_list, list) and len(parsed_list) > 0:
+                            public_id = str(parsed_list[0]).strip().strip("'\"")
+                            print(f"   ✅ Extracted public_id from JSON list: '{public_id}'")
+                    except (ValueError, json.JSONDecodeError):
+                        # Try regex extraction
+                        match = re.search(r"['\"]([^'\"]+)['\"]", public_id)
+                        if match:
+                            public_id = match.group(1)
+                            print(f"   ✅ Extracted public_id using regex: '{public_id}'")
+            
+            # Remove any remaining quotes
+            public_id = public_id.strip().strip("'\"")
+            
+            # Validate public_id format (should not contain brackets or quotes)
+            if '[' in public_id or ']' in public_id:
+                print(f"   ❌ WARNING: Invalid public_id format detected: '{public_id}'")
+                # Try to clean it up one more time
+                public_id = re.sub(r"\[|\]", "", public_id)
+                public_id = re.sub(r"^['\"]+|['\"]+$", "", public_id)
+                public_id = public_id.strip()
+                print(f"   Cleaned public_id: '{public_id}'")
             
             # If it's already a full URL, use it directly
             if public_id.startswith('http://') or public_id.startswith('https://'):
