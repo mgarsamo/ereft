@@ -287,18 +287,59 @@ class PropertyViewSet(viewsets.ModelViewSet):
             # Create PropertyImage objects with the Cloudinary URLs
             if images_data:
                 unique_images = list(dict.fromkeys(images_data))
-                for i, image_url in enumerate(unique_images, 1):
+                print(f"🏠 PropertyViewSet: Creating {len(unique_images)} PropertyImage objects")
+                print(f"🏠 PropertyViewSet: Image URLs received: {[url[:80] + '...' if len(str(url)) > 80 else str(url) for url in unique_images]}")
+                
+                # Limit to 4 images maximum
+                images_to_create = unique_images[:4]
+                
+                created_count = 0
+                for i, image_url in enumerate(images_to_create, 1):
                     try:
-                        PropertyImage.objects.create(
+                        # Ensure image_url is a string
+                        if isinstance(image_url, dict):
+                            image_url = image_url.get('url') or image_url.get('secure_url') or str(image_url)
+                        else:
+                            image_url = str(image_url)
+                        
+                        if not image_url or image_url == 'None' or image_url == 'null':
+                            print(f"⚠️ PropertyViewSet: Skipping invalid image URL at index {i}: {image_url}")
+                            continue
+                        
+                        # Verify it's a valid URL
+                        if not (image_url.startswith('http://') or image_url.startswith('https://')):
+                            print(f"⚠️ PropertyViewSet: Image URL doesn't start with http/https: {image_url[:50]}")
+                            # Still try to create it - might be a Cloudinary public_id
+                        
+                        prop_image = PropertyImage.objects.create(
                             property=property_obj,
                             image=image_url,
                             is_primary=(i == 1),
                             order=i
                         )
-                        print(f"✅ PropertyViewSet: PropertyImage {i}/{len(unique_images)} created")
+                        created_count += 1
+                        print(f"✅ PropertyViewSet: PropertyImage {i}/{len(images_to_create)} created")
+                        print(f"   - ID: {prop_image.id}")
+                        print(f"   - URL: {image_url[:100]}...")
+                        print(f"   - Is Primary: {prop_image.is_primary}")
                     except Exception as img_error:
-                        print(f"⚠️ PropertyViewSet: Failed to create PropertyImage {i}: {img_error}")
+                        print(f"❌ PropertyViewSet: Failed to create PropertyImage {i}: {img_error}")
+                        import traceback
+                        traceback.print_exc()
                         continue
+                
+                # Verify images were created
+                final_count = PropertyImage.objects.filter(property=property_obj).count()
+                print(f"✅ PropertyViewSet: Successfully created {created_count} PropertyImage objects")
+                print(f"✅ PropertyViewSet: Total PropertyImage objects for property {property_obj.id}: {final_count}")
+                
+                # List all images for this property
+                all_images = PropertyImage.objects.filter(property=property_obj).order_by('order')
+                for img in all_images:
+                    print(f"   - Image {img.id}: {img.image[:80]}... (primary: {img.is_primary}, order: {img.order})")
+            else:
+                print(f"⚠️ PropertyViewSet: No images_data to create PropertyImage objects")
+                print(f"   images_data is empty or None")
             
             # Log successful creation with full metadata
             print(f"🎉 PropertyViewSet: Property created successfully!")
