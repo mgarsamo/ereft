@@ -1082,13 +1082,11 @@ def custom_login(request):
         # Try to authenticate with username
         user = authenticate(username=username, password=password)
         
-        # If that fails, try to find user by email and authenticate
+        # If that fails, try to find user by email and authenticate (handle duplicate emails)
         if not user:
-            try:
-                user_obj = User.objects.get(email=username.lower())
+            user_obj = User.objects.filter(email=username.lower()).first()
+            if user_obj:
                 user = authenticate(username=user_obj.username, password=password)
-            except User.DoesNotExist:
-                pass
         
         if user and user.is_active:
             # Check if account is locked due to too many failed attempts
@@ -1255,9 +1253,9 @@ def request_password_reset(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        try:
-            user = User.objects.get(email=email)
-            if user.is_active:
+        # Handle duplicate emails by getting the first match
+        user = User.objects.filter(email=email).first()
+        if user and user.is_active:
                 # Send REAL password reset email
                 try:
                     from .utils import send_password_reset_email
@@ -1420,10 +1418,10 @@ def process_google_oauth_code(code, request):
         # AUTO-ADMIN: Ensure melaku.garsamo@gmail.com is admin
         is_admin_email = email == 'melaku.garsamo@gmail.com'
         
-        # Check if user already exists
-        try:
-            user = User.objects.get(email=email)
-            print(f"🔐 Google OAuth: Existing user found: {user.username}")
+        # Check if user already exists (handle duplicate emails)
+        user = User.objects.filter(email=email).first()
+        if user:
+            print(f"🔐 Google OAuth: Existing user found: {user.username} (ID: {user.id})")
             
             # Update existing user info
             user.first_name = first_name
@@ -1463,8 +1461,8 @@ def process_google_oauth_code(code, request):
                 print(f"🔐 Google OAuth: Welcome email sent to {email} on login")
             except Exception as e:
                 print(f"🔐 Google OAuth: Failed to send welcome email: {str(e)}")
-            
-        except User.DoesNotExist:
+        
+        if not user:
             # Create new user
             username = f"google_{google_id}" if google_id else f"google_{email.split('@')[0]}"
             
@@ -2374,11 +2372,11 @@ def oauth_callback(request):
                 'error': 'No email received from Google'
             }, status=400)
         
-        # Try to get existing user by email
-        try:
-            user = User.objects.get(email=email)
-            print(f"🔐 Google OAuth: Existing user found: {user.username}")
-        except User.DoesNotExist:
+        # Try to get existing user by email (handle duplicate emails)
+        user = User.objects.filter(email=email).first()
+        if user:
+            print(f"🔐 Google OAuth: Existing user found: {user.username} (ID: {user.id})")
+        else:
             # Create new user
             username = user_info.get('name', email.split('@')[0])
             # Ensure username is unique
