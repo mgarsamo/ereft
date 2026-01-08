@@ -91,7 +91,19 @@ class PropertyViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Create a property and return the full detail payload including generated ID."""
-        serializer = self.get_serializer(data=request.data)
+        # Remove 'images' from request.data if files are being uploaded
+        # The serializer expects image URLs (strings), but we handle file uploads in perform_create
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        
+        # If images are being uploaded as files, remove them from serializer data
+        # They will be handled in perform_create via request.FILES
+        if hasattr(request, 'FILES') and 'images' in request.FILES:
+            # Remove images from data to avoid serializer validation error
+            # Files are handled separately in perform_create
+            if 'images' in data:
+                data.pop('images', None)
+        
+        serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
 
         property_obj = self.perform_create(serializer)
