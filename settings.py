@@ -145,10 +145,12 @@ TEMPLATES = [
 # ------------------------------------------------------
 # Database Configuration
 # ------------------------------------------------------
-# Use DATABASE_URL or POSTGRE_DATABASE_URL from environment (Render) or fallback to SQLite
+# Use POSTGRE_DATABASE_URL or DATABASE_URL from environment (Render) or fallback to SQLite
 # Priority: POSTGRE_DATABASE_URL > DATABASE_URL > SQLite
-# NOTE: We prioritize POSTGRE_DATABASE_URL because Render might auto-set DATABASE_URL to SQLite
-DATABASE_URL = os.environ.get('POSTGRE_DATABASE_URL') or os.environ.get('DATABASE_URL')
+# CRITICAL: We prioritize POSTGRE_DATABASE_URL because Render might auto-set DATABASE_URL to SQLite
+POSTGRE_URL = os.environ.get('POSTGRE_DATABASE_URL')
+RENDER_DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = POSTGRE_URL or RENDER_DATABASE_URL
 
 # Log database configuration for debugging
 print("=" * 60)
