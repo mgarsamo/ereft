@@ -374,27 +374,96 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_primary_image(self, obj):
-        # CRITICAL: Get primary image - must return object with image_url
+        """CRITICAL: Get primary image - must return object with full HTTPS image_url"""
+        print(f"🔍 PropertyDetailSerializer.get_primary_image: Called for Property ID={obj.id if obj else 'None'}")
+        
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image:
+            print(f"   Found primary image: ID={primary_image.id}, public_id='{primary_image.image[:50] if primary_image.image else 'None'}...'")
             serialized = PropertyImageSerializer(primary_image).data
-            # Ensure image_url is set
-            if not serialized.get('image_url') and serialized.get('image'):
-                serialized['image_url'] = str(serialized['image']).strip()
-                if serialized['image_url'].startswith('http://'):
-                    serialized['image_url'] = serialized['image_url'].replace('http://', 'https://', 1)
+            print(f"   Serialized primary_image image_url: '{serialized.get('image_url', 'None')[:80] if serialized.get('image_url') else 'None'}...'")
+            
+            # CRITICAL: Ensure image_url is a full HTTPS URL
+            if not serialized.get('image_url') or not serialized.get('image_url', '').startswith('https://'):
+                image_field = serialized.get('image')
+                if image_field:
+                    public_id = str(image_field).strip()
+                    print(f"   Constructing image_url from image field (public_id): '{public_id[:50]}...'")
+                    
+                    # If it's already a URL, convert to HTTPS
+                    if public_id.startswith('http://') or public_id.startswith('https://'):
+                        if public_id.startswith('http://'):
+                            public_id = public_id.replace('http://', 'https://', 1)
+                        serialized['image_url'] = public_id
+                        print(f"   ✅ Converted HTTP to HTTPS: {public_id[:80]}...")
+                    else:
+                        # It's a public_id - construct full URL
+                        try:
+                            from .utils import get_cloudinary_url
+                            from django.conf import settings
+                            
+                            full_url = get_cloudinary_url(public_id)
+                            if full_url:
+                                serialized['image_url'] = full_url
+                                print(f"   ✅ Constructed URL via SDK: {full_url[:80]}...")
+                            else:
+                                # Fallback manual construction
+                                cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                                serialized['image_url'] = full_url
+                                print(f"   ✅ Constructed URL manually: {full_url[:80]}...")
+                        except Exception as e:
+                            print(f"   ⚠️ Failed to construct URL: {e}, using manual fallback")
+                            from django.conf import settings
+                            cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                            full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                            serialized['image_url'] = full_url
+                            print(f"   ✅ Used manual fallback: {full_url[:80]}...")
+            
+            print(f"   📤 Final primary_image image_url: '{serialized.get('image_url', 'None')[:80] if serialized.get('image_url') else 'None'}...'")
             return serialized
         else:
             # Try to get first image if no primary
             first_image = obj.images.first()
             if first_image:
+                print(f"   No primary, using first image: ID={first_image.id}, public_id='{first_image.image[:50] if first_image.image else 'None'}...'")
                 serialized = PropertyImageSerializer(first_image).data
-                # Ensure image_url is set
-                if not serialized.get('image_url') and serialized.get('image'):
-                    serialized['image_url'] = str(serialized['image']).strip()
-                    if serialized['image_url'].startswith('http://'):
-                        serialized['image_url'] = serialized['image_url'].replace('http://', 'https://', 1)
+                
+                # CRITICAL: Ensure image_url is a full HTTPS URL
+                if not serialized.get('image_url') or not serialized.get('image_url', '').startswith('https://'):
+                    image_field = serialized.get('image')
+                    if image_field:
+                        public_id = str(image_field).strip()
+                        print(f"   Constructing image_url from image field (public_id): '{public_id[:50]}...'")
+                        
+                        # If it's already a URL, convert to HTTPS
+                        if public_id.startswith('http://') or public_id.startswith('https://'):
+                            if public_id.startswith('http://'):
+                                public_id = public_id.replace('http://', 'https://', 1)
+                            serialized['image_url'] = public_id
+                        else:
+                            # It's a public_id - construct full URL
+                            try:
+                                from .utils import get_cloudinary_url
+                                from django.conf import settings
+                                
+                                full_url = get_cloudinary_url(public_id)
+                                if full_url:
+                                    serialized['image_url'] = full_url
+                                else:
+                                    cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                    full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                                    serialized['image_url'] = full_url
+                            except Exception as e:
+                                from django.conf import settings
+                                cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'detdm1snc')
+                                full_url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}"
+                                serialized['image_url'] = full_url
+                                print(f"   ✅ Used manual fallback: {full_url[:80]}...")
+                
+                print(f"   📤 Final first_image image_url: '{serialized.get('image_url', 'None')[:80] if serialized.get('image_url') else 'None'}...'")
                 return serialized
+        print(f"   ⚠️ No images found for property")
         return None
     
     def to_representation(self, instance):
