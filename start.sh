@@ -77,9 +77,21 @@ echo "🔄 Running populate_sample_data automatically on deployment..."
 echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
 echo ""
 
+# Suppress database config output when getting initial count
+INITIAL_COUNT=$(python manage.py shell -c "
+import os
+os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
+import django
+django.setup()
+from listings.models import Property
+print(Property.objects.count())
+" 2>/dev/null | tail -1 || echo "0")
+
+echo "📊 Initial property count: $INITIAL_COUNT"
+
 # Run populate_sample_data with explicit error handling and full output
 echo "📝 Executing: python manage.py populate_sample_data"
-python manage.py populate_sample_data
+python manage.py populate_sample_data 2>&1
 EXIT_CODE=$?
 
 echo ""
@@ -88,12 +100,31 @@ echo "============================================================"
 if [ $EXIT_CODE -eq 0 ]; then
     echo "✅ Sample data population command completed successfully"
     
-    # Verify properties were created
+    # Verify properties were created (suppress config output)
     sleep 3  # Give database a moment to commit all transactions
     echo "🔍 Verifying properties were created..."
     
-    FINAL_COUNT=$(python manage.py shell -c "from listings.models import Property; print(Property.objects.count())" 2>/dev/null || echo "0")
-    SAMPLE_COUNT=$(python manage.py shell -c "from listings.models import Property, User; agent = User.objects.filter(username='melaku_agent').first(); print(Property.objects.filter(owner=agent).count() if agent else 0)" 2>/dev/null || echo "0")
+    FINAL_COUNT=$(python manage.py shell -c "
+import os
+os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
+import django
+django.setup()
+from listings.models import Property
+print(Property.objects.count())
+" 2>/dev/null | tail -1 || echo "0")
+    
+    SAMPLE_COUNT=$(python manage.py shell -c "
+import os
+os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
+import django
+django.setup()
+from listings.models import Property, User
+agent = User.objects.filter(username='melaku_agent').first()
+if agent:
+    print(Property.objects.filter(owner=agent).count())
+else:
+    print(0)
+" 2>/dev/null | tail -1 || echo "0")
     
     echo "📊 Final property count: $FINAL_COUNT"
     echo "📊 Sample properties: $SAMPLE_COUNT"
