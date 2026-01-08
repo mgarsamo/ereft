@@ -737,9 +737,30 @@ class Command(BaseCommand):
         
         cache.clear()
         self.stdout.write('🧹 Cache cleared to reflect latest property data')
-        self.stdout.write(f'🎉 Successfully created {properties_created} new properties!')
-        self.stdout.write(f'🔄 Updated {properties_updated} existing properties!')
-        self.stdout.write(f'📊 Total properties in database: {Property.objects.count()}')
+        
+        # Final counts
+        total_properties = Property.objects.count()
+        sample_properties_count = Property.objects.filter(owner=agent_user).count()
+        user_properties_count = total_properties - sample_properties_count
+        
+        self.stdout.write('')
+        self.stdout.write('=' * 60)
+        self.stdout.write('SAMPLE DATA POPULATION SUMMARY')
+        self.stdout.write('=' * 60)
+        self.stdout.write(f'✅ Successfully created {properties_created} new sample properties!')
+        self.stdout.write(f'🔄 Updated {properties_updated} existing sample properties!')
+        self.stdout.write(f'⏭️  Skipped {len(sample_properties) - properties_created - properties_updated} properties (user-created, not modified)')
+        self.stdout.write('')
+        self.stdout.write(f'📊 Total properties in database: {total_properties}')
+        self.stdout.write(f'   - Sample properties: {sample_properties_count}')
+        self.stdout.write(f'   - User-created properties: {user_properties_count}')
         self.stdout.write(f'⭐ Featured properties: {Property.objects.filter(is_featured=True).count()}')
         self.stdout.write(f'🏠 Active properties: {Property.objects.filter(is_active=True).count()}')
         self.stdout.write(f'🏘️ Property types: Houses({Property.objects.filter(property_type="house").count()}), Apartments({Property.objects.filter(property_type="apartment").count()}), Condos({Property.objects.filter(property_type="condo").count()}), Townhouses({Property.objects.filter(property_type="townhouse").count()}), Land({Property.objects.filter(property_type="land").count()}), Commercial({Property.objects.filter(property_type="commercial").count()})')
+        self.stdout.write('=' * 60)
+        
+        if sample_properties_count < 20:
+            self.stdout.write(f'⚠️ WARNING: Only {sample_properties_count} sample properties found. Expected ~24 properties.')
+            self.stdout.write('   This might indicate an issue with property creation.')
+        else:
+            self.stdout.write(f'✅ Sample data population complete! {sample_properties_count} sample properties available.')

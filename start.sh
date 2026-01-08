@@ -76,8 +76,9 @@ PROPERTY_COUNT=$(python manage.py shell -c "from listings.models import Property
 
 echo "📊 Current property count: $PROPERTY_COUNT"
 
-# Always try to populate if count is less than 5, with retry logic
-if [ "$PROPERTY_COUNT" -lt "5" ]; then
+# Always try to populate if count is less than 25 (should have ~24 sample properties)
+# This ensures sample data is populated even if some properties exist
+if [ "$PROPERTY_COUNT" -lt "25" ]; then
     echo "📝 Database has $PROPERTY_COUNT properties. Populating sample data..."
     echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
     echo "🔄 Running: python manage.py populate_sample_data"
