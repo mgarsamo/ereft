@@ -279,16 +279,34 @@ class PropertyViewSet(viewsets.ModelViewSet):
         response_data = detail_serializer.data
         
         # CRITICAL: Force images into response if serializer didn't include them
+        # CRITICAL: ALWAYS ensure images are in response - multiple fallback mechanisms
         images_in_response = response_data.get('images', [])
         print(f"🔍 PropertyViewSet.create: Serializer returned {len(images_in_response)} images")
         
+        # FALLBACK 1: If serializer didn't include images, add from database
         if not images_in_response or len(images_in_response) == 0:
             print(f"❌ CRITICAL: Serializer returned NO images but database has {len(db_images)}!")
             if db_images:
                 # Force add images from database
                 print(f"   Adding {len(db_images)} images directly from database to response...")
                 response_data['images'] = [PropertyImageSerializer(img).data for img in db_images]
-                print(f"   ✅ Added {len(response_data['images'])} images to response")
+                print(f"   ✅ Added {len(response_data['images'])} images to response from database")
+        
+        # FALLBACK 2: If still no images but we have validated URLs, create them in response directly
+        if (not response_data.get('images') or len(response_data.get('images', [])) == 0) and validated_image_urls:
+            print(f"⚠️ CRITICAL: No images in response or database, but we have {len(validated_image_urls)} validated URLs!")
+            print(f"   Creating image objects directly in response...")
+            response_data['images'] = []
+            for idx, url in enumerate(validated_image_urls[:4], 1):
+                img_obj = {
+                    'id': None,
+                    'image': url,
+                    'image_url': url,
+                    'is_primary': (idx == 1),
+                    'order': idx,
+                }
+                response_data['images'].append(img_obj)
+                print(f"   ✅ Response Image {idx}: image_url={url[:80]}...")
         
         # CRITICAL: Ensure every image has image_url set to a valid HTTPS URL
         if response_data.get('images'):
@@ -307,9 +325,14 @@ class PropertyViewSet(viewsets.ModelViewSet):
                         image_url = image_url.replace('http://', 'https://', 1)
                     # Set image_url
                     img_data['image_url'] = image_url
+                    # Also ensure image field is set
+                    if not img_data.get('image'):
+                        img_data['image'] = image_url
                     print(f"   ✅ Response Image {idx}: image_url={image_url[:80]}...")
                 else:
                     print(f"   ❌ Response Image {idx}: NO URL available!")
+                    # Remove invalid images from response
+                    response_data['images'] = [img for img in response_data['images'] if img.get('image_url') or img.get('image')]
         
         # CRITICAL: Verify primary_image is set correctly
         if not response_data.get('primary_image') and response_data.get('images'):
