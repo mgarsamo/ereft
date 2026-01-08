@@ -108,14 +108,32 @@ class PropertyViewSet(viewsets.ModelViewSet):
         # CRITICAL: Extract image URLs BEFORE copying, as getlist() only works on QueryDict
         image_urls = []
         
-        # Method 1: Use getlist if available (QueryDict)
+        # Log what we're receiving
+        print(f"🏠 PropertyViewSet.create: Request data type: {type(request.data)}")
+        print(f"🏠 PropertyViewSet.create: Has getlist: {hasattr(request.data, 'getlist')}")
+        print(f"🏠 PropertyViewSet.create: Has FILES: {hasattr(request, 'FILES')}")
+        if hasattr(request, 'FILES') and request.FILES:
+            print(f"🏠 PropertyViewSet.create: FILES keys: {list(request.FILES.keys())}")
+        
+        # Method 1: Use getlist if available (QueryDict) - this handles FormData with multiple values
         if hasattr(request.data, 'getlist'):
-            image_urls = request.data.getlist('images')
-            if image_urls:
-                image_urls = [str(url).strip() for url in image_urls if url and str(url).strip() and len(str(url).strip()) > 10]
-                print(f"🏠 PropertyViewSet.create: Found {len(image_urls)} image URLs via getlist('images')")
-                for idx, url in enumerate(image_urls, 1):
-                    print(f"   Image URL {idx}: {url[:100]}...")
+            raw_images = request.data.getlist('images')
+            print(f"🏠 PropertyViewSet.create: getlist('images') returned {len(raw_images)} items")
+            for idx, item in enumerate(raw_images):
+                print(f"   Raw item {idx}: type={type(item)}, value={str(item)[:100] if item else 'None'}...")
+                
+                # Convert to string and validate
+                if item:
+                    item_str = str(item).strip()
+                    # Skip if it's a File object (shouldn't happen but handle it)
+                    if hasattr(item, 'name'):
+                        print(f"   ⚠️ Item {idx} is a File object, skipping (images should be URLs)")
+                        continue
+                    # Validate it's a URL string
+                    if item_str and len(item_str) > 10 and (item_str.startswith('http://') or item_str.startswith('https://')):
+                        image_urls.append(item_str)
+                    else:
+                        print(f"   ⚠️ Item {idx} is not a valid URL: {item_str[:50]}...")
         
         # Now copy the data (this converts QueryDict to dict, losing getlist capability)
         data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
@@ -123,33 +141,82 @@ class PropertyViewSet(viewsets.ModelViewSet):
         # Method 2: If getlist didn't work, try data['images'] which might be a list already
         if not image_urls and 'images' in data:
             images_value = data.get('images')
+            print(f"🏠 PropertyViewSet.create: Found 'images' in data dict, type: {type(images_value)}")
             if images_value:
                 if isinstance(images_value, list):
-                    image_urls = [str(v).strip() for v in images_value if v and str(v).strip() and len(str(v).strip()) > 10]
-                    print(f"🏠 PropertyViewSet.create: Found {len(image_urls)} image URLs in list")
-                elif isinstance(images_value, str) and images_value.strip():
-                    image_urls = [images_value.strip()]
-                    print(f"🏠 PropertyViewSet.create: Found single image URL: {images_value[:100]}...")
+                    print(f"🏠 PropertyViewSet.create: Processing list with {len(images_value)} items")
+                    for idx, v in enumerate(images_value):
+                        print(f"   List item {idx}: type={type(v)}, value={str(v)[:100] if v else 'None'}...")
+                        if v:
+                            v_str = str(v).strip()
+                            # Skip File objects
+                            if hasattr(v, 'name'):
+                                print(f"   ⚠️ List item {idx} is a File object, skipping")
+                                continue
+                            # Validate URL
+                            if v_str and len(v_str) > 10 and (v_str.startswith('http://') or v_str.startswith('https://')):
+                                image_urls.append(v_str)
+                elif isinstance(images_value, str):
+                    print(f"🏠 PropertyViewSet.create: Found single string value: {images_value[:100]}...")
+                    if images_value.strip() and len(images_value.strip()) > 10:
+                        image_urls.append(images_value.strip())
+        
+        # CRITICAL: Ensure all image URLs are valid strings (not File objects)
+        # Filter and convert to ensure they're all valid URL strings
+        validated_image_urls = []
+        for url in image_urls:
+            if isinstance(url, str):
+                url = url.strip()
+                if url and len(url) > 10 and (url.startswith('http://') or url.startswith('https://')):
+                    validated_image_urls.append(url)
+            elif url:
+                # Try to convert to string
+                url_str = str(url).strip()
+                if url_str and len(url_str) > 10 and (url_str.startswith('http://') or url_str.startswith('https://')):
+                    validated_image_urls.append(url_str)
+        
+        print(f"✅ PropertyViewSet.create: Validated {len(validated_image_urls)} image URLs")
+        for idx, url in enumerate(validated_image_urls, 1):
+            print(f"   Validated URL {idx}: {url[:100]}...")
         
         # Set the images list in the data dict for the serializer
-        if image_urls:
-            data['images'] = image_urls
-            print(f"✅ PropertyViewSet.create: Set {len(image_urls)} image URLs in serializer data")
+        if validated_image_urls:
+            data['images'] = validated_image_urls
+            print(f"✅ PropertyViewSet.create: Set {len(validated_image_urls)} image URLs in serializer data")
         else:
+            # Remove images key if empty to avoid validation errors
             data.pop('images', None)
-            print(f"⚠️ PropertyViewSet.create: No valid image URLs found")
+            print(f"⚠️ PropertyViewSet.create: No valid image URLs found, removed 'images' from data")
         
-        # If images are being uploaded as files, remove them from serializer data
-        # They will be handled in perform_create via request.FILES
+        # CRITICAL: If images are being uploaded as files, remove them from serializer data
+        # Files are handled separately in perform_create via request.FILES
         # This prevents validation errors since serializer expects strings, not File objects
-        if hasattr(request, 'FILES') and request.FILES:
-            # Check if 'images' key exists in FILES (multiple files uploaded)
-            if 'images' in request.FILES:
-                # Remove images from data dict to avoid serializer validation error
-                # Files are handled separately in perform_create via request.FILES
-                if 'images' in data:
-                    data.pop('images', None)
-                print(f"🏠 PropertyViewSet: Detected {len(request.FILES.getlist('images'))} image files in request.FILES")
+        if hasattr(request, 'FILES') and request.FILES and 'images' in request.FILES:
+            # Remove images from data dict to avoid serializer validation error
+            # Files are handled separately in perform_create via request.FILES
+            if 'images' in data:
+                data.pop('images', None)
+            print(f"🏠 PropertyViewSet.create: Detected {len(request.FILES.getlist('images'))} image files in request.FILES, removed from serializer data")
+        
+        # CRITICAL: Final validation before serializer
+        if 'images' in data:
+            images_check = data['images']
+            print(f"🏠 PropertyViewSet.create: Final check - 'images' in data: type={type(images_check)}")
+            if isinstance(images_check, list):
+                print(f"🏠 PropertyViewSet.create: Final check - list has {len(images_check)} items")
+                for idx, item in enumerate(images_check):
+                    item_type = type(item)
+                    item_str = str(item)[:50] if item else 'None'
+                    print(f"   Final item {idx}: type={item_type}, value={item_str}...")
+                    if not isinstance(item, str):
+                        print(f"   ❌ ERROR: Item {idx} is not a string! Type: {item_type}")
+                        # Convert to string
+                        if item:
+                            data['images'][idx] = str(item).strip()
+                        else:
+                            # Remove invalid items
+                            data['images'] = [x for x in data['images'] if x and isinstance(x, str)]
+                            print(f"   ✅ Fixed: Removed invalid items, {len(data['images'])} valid items remain")
         
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
