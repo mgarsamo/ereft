@@ -10,7 +10,7 @@ class Command(BaseCommand):
     help = 'Populate database with comprehensive sample property data'
 
     def _generate_260_properties(self):
-        """Generate 260 diverse properties with contact info"""
+        """Generate 500 diverse properties with contact info (function name kept for compatibility)"""
         ethiopian_names = [
             "Abebe", "Tigist", "Mulugeta", "Hirut", "Yonas", "Marta", "Solomon", "Alemitu",
             "Getachew", "Meron", "Daniel", "Selam", "Tewodros", "Rahel", "Kebede", "Mihret",
@@ -23,8 +23,11 @@ class Command(BaseCommand):
         phone_prefixes = ["+251911", "+251912", "+251913", "+251914", "+251915", "+251916", "+251917", "+251918", "+251919", "+251966", "+251967", "+251968", "+251969"]
         sub_cities = ["Bole", "Kirkos", "Arada", "Addis Ketema", "Lideta", "Nifas Silk-Lafto", "Kolfe Keranio", "Gulele", "Yeka", "Akaki Kality"]
         property_types = ["house", "apartment", "condo", "townhouse", "land", "commercial"]
-        property_weights = [0.30, 0.30, 0.15, 0.10, 0.10, 0.05]
+        # Better stratification: 35% houses, 35% apartments, 12% condos, 8% townhouses, 7% land, 3% commercial
+        property_weights = [0.35, 0.35, 0.12, 0.08, 0.07, 0.03]
         listing_types = ["sale", "rent"]
+        # Better mix: 60% for sale, 40% for rent
+        listing_weights = [0.60, 0.40]
         
         price_ranges = {
             "house": {"sale": (1500000, 12000000), "rent": (15000, 80000)},
@@ -57,10 +60,11 @@ class Command(BaseCommand):
             "house": [
                 "1396122", "186077", "280229", "1029599", "2635038", "1571460", "1643383", "1648776", 
                 "1438832", "1571468", "280222", "1396132", "259588", "1571471", "1643384", "280233",
-                "1024311", "280221", "106399", "106399", "1396138", "280223", "271743", "106399",
+                "1024311", "280221", "106399", "280224", "1396138", "280223", "271743", "280225",
                 "1571463", "1648768", "1396131", "1571469", "1648778", "280232", "1571470", "271724",
                 "1396127", "1643385", "1571472", "280234", "271742", "1396135", "1648779", "271728",
-                "1571473", "280236", "1396139", "1643386", "271729", "1571474", "280237", "271730"
+                "1571473", "280236", "1396139", "1643386", "271729", "1571474", "280237", "271730",
+                "280238", "1643387", "1571475", "280239", "271731", "1396140", "1648780", "271732"
             ],
             "apartment": [
                 "1457842", "271624", "271795", "1457847", "1329711", "439227", "1918291", "1643383", 
@@ -140,44 +144,78 @@ class Command(BaseCommand):
             has_heating = random.choice([True, False, False])
             year_built = random.randint(2010, 2024) if property_type != "land" else None
             
+            # More diverse title generation for better SEO and appeal
             if property_type == "house":
-                title = random.choice([
+                title_templates = [
                     f"Beautiful {bedrooms}-Bedroom House in {sub_city}",
                     f"Modern Family Home in {sub_city}",
                     f"Spacious {bedrooms}-BR House in {sub_city}",
                     f"Luxury {bedrooms}-Bedroom Villa in {sub_city}",
-                    f"Charming {bedrooms}-BR Home in {sub_city}"
-                ])
+                    f"Charming {bedrooms}-BR Home in {sub_city}",
+                    f"Elegant {bedrooms}-Bedroom Residence in {sub_city}",
+                    f"Stunning {bedrooms}-BR Family Home in {sub_city}",
+                    f"Premium {bedrooms}-Bedroom Property in {sub_city}",
+                    f"Contemporary {bedrooms}-BR House in {sub_city}",
+                    f"Exquisite {bedrooms}-Bedroom Home in {sub_city}"
+                ]
+                title = random.choice(title_templates)
             elif property_type == "apartment":
-                title = random.choice([
+                title_templates = [
                     f"Cozy {bedrooms}-Bedroom Apartment in {sub_city}",
                     f"Modern {bedrooms}-BR Apartment in {sub_city}",
                     f"Luxury {bedrooms}-Bedroom Apartment in {sub_city}",
-                    f"Spacious {bedrooms}-BR Apartment in {sub_city}"
-                ])
+                    f"Spacious {bedrooms}-BR Apartment in {sub_city}",
+                    f"Stylish {bedrooms}-Bedroom Unit in {sub_city}",
+                    f"Contemporary {bedrooms}-BR Apartment in {sub_city}",
+                    f"Elegant {bedrooms}-Bedroom Flat in {sub_city}",
+                    f"Premium {bedrooms}-BR Apartment in {sub_city}",
+                    f"Comfortable {bedrooms}-Bedroom Apartment in {sub_city}",
+                    f"Bright {bedrooms}-BR Apartment in {sub_city}"
+                ]
+                title = random.choice(title_templates)
             elif property_type == "condo":
-                title = random.choice([
+                title_templates = [
                     f"Elegant {bedrooms}-Bedroom Condo in {sub_city}",
                     f"Modern {bedrooms}-BR Condo in {sub_city}",
-                    f"Luxury {bedrooms}-Bedroom Condo in {sub_city}"
-                ])
+                    f"Luxury {bedrooms}-Bedroom Condo in {sub_city}",
+                    f"Stylish {bedrooms}-BR Condo in {sub_city}",
+                    f"Premium {bedrooms}-Bedroom Condo in {sub_city}",
+                    f"Contemporary {bedrooms}-BR Condo in {sub_city}"
+                ]
+                title = random.choice(title_templates)
             elif property_type == "townhouse":
-                title = random.choice([
+                title_templates = [
                     f"Modern {bedrooms}-Bedroom Townhouse in {sub_city}",
-                    f"Spacious {bedrooms}-BR Townhouse in {sub_city}"
-                ])
+                    f"Spacious {bedrooms}-BR Townhouse in {sub_city}",
+                    f"Elegant {bedrooms}-Bedroom Townhouse in {sub_city}",
+                    f"Contemporary {bedrooms}-BR Townhouse in {sub_city}",
+                    f"Luxury {bedrooms}-Bedroom Townhouse in {sub_city}"
+                ]
+                title = random.choice(title_templates)
             elif property_type == "land":
-                title = random.choice([
+                title_templates = [
                     f"Prime Land Plot in {sub_city}",
                     f"Development Land in {sub_city}",
-                    f"Investment Land in {sub_city}"
-                ])
+                    f"Investment Land in {sub_city}",
+                    f"Residential Land Plot in {sub_city}",
+                    f"Buildable Land in {sub_city}",
+                    f"Prime Real Estate Land in {sub_city}",
+                    f"Strategic Land Location in {sub_city}",
+                    f"Premium Land Parcel in {sub_city}"
+                ]
+                title = random.choice(title_templates)
             else:  # commercial
-                title = random.choice([
+                title_templates = [
                     f"Prime Commercial Space in {sub_city}",
                     f"Office Space in {sub_city}",
-                    f"Retail Space in {sub_city}"
-                ])
+                    f"Retail Space in {sub_city}",
+                    f"Commercial Property in {sub_city}",
+                    f"Business Space in {sub_city}",
+                    f"Prime Storefront in {sub_city}",
+                    f"Professional Office Space in {sub_city}",
+                    f"Commercial Building in {sub_city}"
+                ]
+                title = random.choice(title_templates)
             
             # More detailed and varied descriptions
             if property_type == "house":
