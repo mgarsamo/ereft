@@ -283,6 +283,32 @@ class PropertySerializer(serializers.ModelSerializer):
         model = Property
         fields = '__all__'
     
+    def to_representation(self, instance):
+        """Remove contact_name and contact_phone for non-admin users"""
+        representation = super().to_representation(instance)
+        request = self.context.get('request')
+        
+        # Check if user is admin
+        is_admin = False
+        if request and request.user and request.user.is_authenticated:
+            is_admin = (
+                request.user.is_staff or 
+                request.user.is_superuser or 
+                request.user.email in [
+                    'admin@ereft.com', 
+                    'melaku.garsamo@gmail.com', 
+                    'cb.garsamo@gmail.com', 
+                    'lydiageleta45@gmail.com'
+                ]
+            )
+        
+        # Remove contact info for non-admin users
+        if not is_admin:
+            representation.pop('contact_name', None)
+            representation.pop('contact_phone', None)
+        
+        return representation
+    
     def get_primary_image(self, obj):
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image:
@@ -455,6 +481,32 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Property
         fields = '__all__'
+    
+    def to_representation(self, instance):
+        """Remove contact_name and contact_phone for non-admin users"""
+        representation = super().to_representation(instance)
+        request = self.context.get('request')
+        
+        # Check if user is admin
+        is_admin = False
+        if request and request.user and request.user.is_authenticated:
+            is_admin = (
+                request.user.is_staff or 
+                request.user.is_superuser or 
+                request.user.email in [
+                    'admin@ereft.com', 
+                    'melaku.garsamo@gmail.com', 
+                    'cb.garsamo@gmail.com', 
+                    'lydiageleta45@gmail.com'
+                ]
+            )
+        
+        # Remove contact info for non-admin users
+        if not is_admin:
+            representation.pop('contact_name', None)
+            representation.pop('contact_phone', None)
+        
+        return representation
     
     def get_primary_image(self, obj):
         """CRITICAL: Get primary image - must return object with full HTTPS image_url"""
@@ -663,6 +715,28 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
             print(f"   Primary image_url: '{primary_url[:80] if primary_url and primary_url != 'None' else 'None'}...'")
         else:
             print(f"   Primary image: None")
+        
+        # ADMIN-ONLY: Remove contact_name and contact_phone for non-admin users
+        request = self.context.get('request')
+        is_admin = False
+        if request and request.user and request.user.is_authenticated:
+            is_admin = (
+                request.user.is_staff or 
+                request.user.is_superuser or 
+                request.user.email in [
+                    'admin@ereft.com', 
+                    'melaku.garsamo@gmail.com', 
+                    'cb.garsamo@gmail.com', 
+                    'lydiageleta45@gmail.com'
+                ]
+            )
+        
+        if not is_admin:
+            representation.pop('contact_name', None)
+            representation.pop('contact_phone', None)
+            print(f"   🔒 Removed contact info for non-admin user: {request.user.username if request and request.user else 'anonymous'}")
+        else:
+            print(f"   ✅ Admin user: contact_name={representation.get('contact_name', 'None')}, contact_phone={representation.get('contact_phone', 'None')}")
         
         return representation
     

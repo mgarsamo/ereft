@@ -1110,14 +1110,20 @@ class PropertyViewSet(viewsets.ModelViewSet):
         """
         Delete a property - bulletproof with payments table handling
         Uses raw SQL if Django ORM fails due to missing payments table
+        Admins can delete any listing, owners can delete their own
         """
         try:
             # Get the property
             instance = self.get_object()
             user = request.user
 
-            # Verify ownership
-            if not instance.owner or instance.owner_id != user.id:
+            # Check if user is admin (staff, superuser, or admin email)
+            is_admin = user.is_staff or user.is_superuser or user.email in [
+                'admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com'
+            ]
+
+            # Verify ownership (unless admin)
+            if not is_admin and (not instance.owner or instance.owner_id != user.id):
                 return Response(
                     {'detail': 'You can only delete your own listings.'},
                     status=status.HTTP_403_FORBIDDEN
