@@ -4,6 +4,7 @@ from listings.models import Property, PropertyImage, Neighborhood, UserProfile
 from decimal import Decimal
 from django.core.cache import cache
 from django.utils import timezone
+import random
 
 class Command(BaseCommand):
     help = 'Populate database with comprehensive sample property data'
@@ -674,6 +675,12 @@ class Command(BaseCommand):
             },
         ]
         
+        # Generate 260 additional diverse properties with contact info
+        self.stdout.write('🔄 Generating 260 additional diverse properties...')
+        additional_properties = self._generate_260_properties()
+        sample_properties.extend(additional_properties)
+        self.stdout.write(f'✅ Generated {len(additional_properties)} additional properties')
+        
         properties_created = 0
         properties_updated = 0
         
@@ -716,6 +723,10 @@ class Command(BaseCommand):
                 property_obj.owner = agent_user
                 property_obj.is_published = True
                 property_obj.is_active = True
+                if contact_name:
+                    property_obj.contact_name = contact_name
+                if contact_phone:
+                    property_obj.contact_phone = contact_phone
                 property_obj.save()
                 self.stdout.write(f'🔄 Updated sample property: {prop_payload["title"]}')
                 properties_updated += 1
