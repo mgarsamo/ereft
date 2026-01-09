@@ -155,6 +155,18 @@ else
     echo "⚠️ Property status update completed with warnings (exit code: $STATUS_UPDATE_CODE)"
 fi
 
+# Ensure all admin emails have admin privileges
+echo ""
+echo "🔐 Ensuring all admin users have admin privileges..."
+python manage.py ensure_all_admins 2>&1
+ADMIN_UPDATE_CODE=$?
+
+if [ $ADMIN_UPDATE_CODE -eq 0 ]; then
+    echo "✅ Admin privilege check completed successfully"
+else
+    echo "⚠️ Admin privilege check completed with warnings (exit code: $ADMIN_UPDATE_CODE)"
+fi
+
 echo ""
 
 # Test welcome email (only on first start or if explicitly needed)
