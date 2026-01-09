@@ -362,6 +362,7 @@ class PropertySerializer(serializers.ModelSerializer):
 class PropertyListSerializer(serializers.ModelSerializer):
     """Simplified property serializer for list views - Ethiopia fields, m² units"""
     images = PropertyImageSerializer(many=True, read_only=True)
+    owner = UserSerializer(read_only=True)
     primary_image = serializers.SerializerMethodField()
     is_favorited = serializers.SerializerMethodField()
     
@@ -370,7 +371,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'price', 'property_type', 'listing_type',
             'address', 'city', 'sub_city', 'kebele', 'bedrooms', 'bathrooms',
-            'area_sqm', 'images', 'primary_image', 'is_favorited', 'created_at', 'status'
+            'area_sqm', 'images', 'primary_image', 'is_favorited', 'created_at', 'status', 'owner', 'views_count'
         ]
         # Note: contact_name and contact_phone are NOT in fields list, so they won't be included
     
