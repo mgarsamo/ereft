@@ -9,6 +9,196 @@ import random
 class Command(BaseCommand):
     help = 'Populate database with comprehensive sample property data'
 
+    def _generate_260_properties(self):
+        """Generate 260 diverse properties with contact info"""
+        ethiopian_names = [
+            "Abebe", "Tigist", "Mulugeta", "Hirut", "Yonas", "Marta", "Solomon", "Alemitu",
+            "Getachew", "Meron", "Daniel", "Selam", "Tewodros", "Rahel", "Kebede", "Mihret",
+            "Bereket", "Eyerusalem", "Henok", "Bethelhem", "Yared", "Meskel", "Fitsum", "Hanna",
+            "Girma", "Tsehay", "Mekonnen", "Aster", "Assefa", "Yohannes", "Mulu",
+            "Tesfaye", "Kidan", "Amanuel", "Lydia", "Abel", "Samuel", "Ruth",
+            "Elias", "Martha", "Joseph", "Sarah", "Michael", "Mary", "David", "Esther"
+        ]
+        
+        phone_prefixes = ["+251911", "+251912", "+251913", "+251914", "+251915", "+251916", "+251917", "+251918", "+251919", "+251966", "+251967", "+251968", "+251969"]
+        sub_cities = ["Bole", "Kirkos", "Arada", "Addis Ketema", "Lideta", "Nifas Silk-Lafto", "Kolfe Keranio", "Gulele", "Yeka", "Akaki Kality"]
+        property_types = ["house", "apartment", "condo", "townhouse", "land", "commercial"]
+        property_weights = [0.30, 0.30, 0.15, 0.10, 0.10, 0.05]
+        listing_types = ["sale", "rent"]
+        
+        price_ranges = {
+            "house": {"sale": (1500000, 12000000), "rent": (15000, 80000)},
+            "apartment": {"sale": (800000, 8000000), "rent": (8000, 50000)},
+            "condo": {"sale": (1200000, 6000000), "rent": (12000, 45000)},
+            "townhouse": {"sale": (2000000, 5000000), "rent": (18000, 40000)},
+            "land": {"sale": (500000, 8000000), "rent": (5000, 30000)},
+            "commercial": {"sale": (2000000, 15000000), "rent": (20000, 100000)}
+        }
+        
+        bedroom_ranges = {
+            "house": (2, 6), "apartment": (1, 4), "condo": (1, 4),
+            "townhouse": (2, 5), "land": (0, 0), "commercial": (0, 0)
+        }
+        
+        area_ranges = {
+            "house": (120, 500), "apartment": (45, 200), "condo": (60, 180),
+            "townhouse": (100, 300), "land": (200, 2000), "commercial": (50, 1000)
+        }
+        
+        base_coords = {
+            "Bole": (9.015, 38.760), "Kirkos": (9.010, 38.750), "Arada": (9.030, 38.740),
+            "Addis Ketema": (9.005, 38.720), "Lideta": (9.028, 38.738), "Nifas Silk-Lafto": (8.985, 38.725),
+            "Kolfe Keranio": (9.009, 38.739), "Gulele": (9.045, 38.720), "Yeka": (9.025, 38.785),
+            "Akaki Kality": (8.950, 38.740)
+        }
+        
+        image_sets = {
+            "house": ["1396122", "186077", "280229", "1029599", "2635038", "1571460", "1643383", "1648776", "1438832", "1571468", "280222", "1396132", "259588", "1571471", "1643384"],
+            "apartment": ["1457842", "271624", "271795", "1457847", "1329711", "439227", "1918291", "1643383", "1571460", "271643", "1457846", "1329712", "271796", "1457848"],
+            "condo": ["1643383", "1571463", "1350789", "259962", "271643", "1457842", "271624", "1643384"],
+            "townhouse": ["1438832", "1396122", "259588", "1571468", "1396132", "1438833", "1571469"],
+            "land": ["1105766", "1268871", "1179229", "1105767", "1268872", "1105768"],
+            "commercial": ["380768", "1181406", "1643389", "3184299", "1267338", "1267360", "1181407", "380769"]
+        }
+        
+        properties = []
+        for i in range(260):
+            property_type = random.choices(property_types, weights=property_weights)[0]
+            listing_type = random.choice(listing_types)
+            sub_city = random.choice(sub_cities)
+            
+            price_min, price_max = price_ranges[property_type][listing_type]
+            price = Decimal(str(random.randint(price_min, price_max)))
+            
+            if property_type in ["land", "commercial"]:
+                bedrooms = 0
+                bathrooms = Decimal('0')
+            else:
+                bedrooms = random.randint(*bedroom_ranges[property_type])
+                bathrooms = Decimal(str(random.choice([1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0])))
+            
+            area_sqm = random.randint(*area_ranges[property_type])
+            
+            base_lat, base_lng = base_coords.get(sub_city, (9.010, 38.750))
+            lat = Decimal(str(base_lat + random.uniform(-0.01, 0.01)))
+            lng = Decimal(str(base_lng + random.uniform(-0.01, 0.01)))
+            
+            first_name = random.choice(ethiopian_names)
+            last_name = random.choice(ethiopian_names)
+            contact_name = f"{first_name} {last_name}"
+            prefix = random.choice(phone_prefixes)
+            contact_phone = f"{prefix}{''.join([str(random.randint(0, 9)) for _ in range(6)])}"
+            
+            image_ids = image_sets.get(property_type, image_sets["house"])
+            selected = random.sample(image_ids, min(3, len(image_ids)))
+            images = [{'url': f'https://images.pexels.com/photos/{img_id}/pexels-photo-{img_id}.jpeg?auto=compress&cs=tinysrgb&w=1200', 'caption': f'{property_type.capitalize()} image {idx+1}'} for idx, img_id in enumerate(selected)]
+            
+            has_garage = random.choice([True, False]) if property_type != "apartment" else random.choice([True, False, False])
+            has_pool = random.choice([True, False, False]) if property_type in ["house", "condo"] else False
+            has_garden = random.choice([True, False]) if property_type in ["house", "townhouse", "land"] else False
+            has_balcony = random.choice([True, False]) if property_type in ["apartment", "condo", "townhouse"] else False
+            is_furnished = random.choice([True, False]) if listing_type == "rent" else random.choice([True, False, False])
+            has_air_conditioning = random.choice([True, False])
+            has_heating = random.choice([True, False, False])
+            year_built = random.randint(2010, 2024) if property_type != "land" else None
+            
+            if property_type == "house":
+                title = random.choice([
+                    f"Beautiful {bedrooms}-Bedroom House in {sub_city}",
+                    f"Modern Family Home in {sub_city}",
+                    f"Spacious {bedrooms}-BR House in {sub_city}",
+                    f"Luxury {bedrooms}-Bedroom Villa in {sub_city}",
+                    f"Charming {bedrooms}-BR Home in {sub_city}"
+                ])
+            elif property_type == "apartment":
+                title = random.choice([
+                    f"Cozy {bedrooms}-Bedroom Apartment in {sub_city}",
+                    f"Modern {bedrooms}-BR Apartment in {sub_city}",
+                    f"Luxury {bedrooms}-Bedroom Apartment in {sub_city}",
+                    f"Spacious {bedrooms}-BR Apartment in {sub_city}"
+                ])
+            elif property_type == "condo":
+                title = random.choice([
+                    f"Elegant {bedrooms}-Bedroom Condo in {sub_city}",
+                    f"Modern {bedrooms}-BR Condo in {sub_city}",
+                    f"Luxury {bedrooms}-Bedroom Condo in {sub_city}"
+                ])
+            elif property_type == "townhouse":
+                title = random.choice([
+                    f"Modern {bedrooms}-Bedroom Townhouse in {sub_city}",
+                    f"Spacious {bedrooms}-BR Townhouse in {sub_city}"
+                ])
+            elif property_type == "land":
+                title = random.choice([
+                    f"Prime Land Plot in {sub_city}",
+                    f"Development Land in {sub_city}",
+                    f"Investment Land in {sub_city}"
+                ])
+            else:  # commercial
+                title = random.choice([
+                    f"Prime Commercial Space in {sub_city}",
+                    f"Office Space in {sub_city}",
+                    f"Retail Space in {sub_city}"
+                ])
+            
+            if property_type == "house":
+                description = f"Beautiful {bedrooms}-bedroom house in {sub_city}. Perfect for families with modern amenities and great location."
+            elif property_type == "apartment":
+                description = f"Modern {bedrooms}-bedroom apartment in {sub_city}. Close to amenities, schools, and shopping centers."
+            elif property_type == "condo":
+                description = f"Elegant {bedrooms}-bedroom condo in {sub_city}. Building features include security and modern facilities."
+            elif property_type == "townhouse":
+                description = f"Spacious {bedrooms}-bedroom townhouse in {sub_city}. Great for families seeking privacy and community."
+            elif property_type == "land":
+                description = f"Prime {area_sqm}sqm land plot in {sub_city}. Perfect for development or investment. Road access and utilities available."
+            else:  # commercial
+                description = f"Excellent commercial space in {sub_city}. {area_sqm}sqm of prime retail/office space in high-traffic area."
+            
+            street_names = ["Main Street", "Churchill Road", "Ras Abebe Aregay Street", "Ethiopia Street", "Unity Road"]
+            street = random.choice(street_names)
+            house_num = random.randint(1, 999)
+            address = f"{house_num} {street}, {sub_city}, Addis Ababa"
+            kebele = str(random.randint(1, 20))
+            is_featured = random.random() < 0.10
+            
+            prop_data = {
+                'title': title,
+                'description': description,
+                'property_type': property_type,
+                'listing_type': listing_type,
+                'price': price,
+                'address': address,
+                'city': 'Addis Ababa',
+                'sub_city': sub_city,
+                'kebele': kebele,
+                'country': 'Ethiopia',
+                'latitude': lat,
+                'longitude': lng,
+                'bedrooms': bedrooms,
+                'bathrooms': bathrooms,
+                'area_sqm': area_sqm,
+                'year_built': year_built,
+                'has_garage': has_garage,
+                'has_pool': has_pool,
+                'has_garden': has_garden,
+                'has_balcony': has_balcony,
+                'is_furnished': is_furnished,
+                'has_air_conditioning': has_air_conditioning,
+                'has_heating': has_heating,
+                'is_featured': is_featured,
+                'status': 'active',
+                'contact_name': contact_name,
+                'contact_phone': contact_phone,
+                'images': images
+            }
+            
+            if property_type == "land":
+                prop_data['lot_size_sqm'] = area_sqm
+            
+            properties.append(prop_data)
+        
+        return properties
+
     def handle(self, *args, **options):
         self.stdout.write('🏠 Starting to populate sample property data...')
         
@@ -692,13 +882,17 @@ class Command(BaseCommand):
             if area:
                 prop_payload['price_per_sqm'] = (prop_payload['price'] / Decimal(area)).quantize(Decimal('0.01'))
 
+            # Extract contact info if present
+            contact_name = prop_payload.pop('contact_name', None)
+            contact_phone = prop_payload.pop('contact_phone', None)
+            
             # Use get_or_create with title to avoid duplicates
             # This ensures we never overwrite user-created properties
             # CRITICAL: Only create/update sample properties, NEVER touch user-created properties
             # Check if this is a sample property (owned by the sample agent)
             property_obj, created = Property.objects.get_or_create(
                 title=prop_payload['title'],
-                defaults={**prop_payload, 'owner': agent_user, 'is_published': True, 'is_active': True},
+                defaults={**prop_payload, 'owner': agent_user, 'is_published': True, 'is_active': True, 'contact_name': contact_name, 'contact_phone': contact_phone},
             )
 
             # Only update if this property is owned by the sample agent (not a user-created property)
