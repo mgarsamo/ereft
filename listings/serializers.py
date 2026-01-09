@@ -538,6 +538,44 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
         model = Property
         fields = '__all__'
     
+    def validate(self, data):
+        """Validate that contact_name and contact_phone are required for updates"""
+        # Only validate if this is a create/update operation (not a read)
+        if self.instance is None:  # This is a create operation
+            contact_name = data.get('contact_name', '').strip() if data.get('contact_name') else ''
+            contact_phone = data.get('contact_phone', '').strip() if data.get('contact_phone') else ''
+            
+            if not contact_name:
+                raise serializers.ValidationError({
+                    'contact_name': 'Contact Name is required.'
+                })
+            
+            if not contact_phone:
+                raise serializers.ValidationError({
+                    'contact_phone': 'Contact Phone is required.'
+                })
+        else:  # This is an update operation
+            # For updates, validate if the fields are being updated
+            contact_name = data.get('contact_name', None)
+            contact_phone = data.get('contact_phone', None)
+            
+            # If fields are provided in the update, they must not be empty
+            if 'contact_name' in data:
+                contact_name_str = contact_name.strip() if contact_name else ''
+                if not contact_name_str:
+                    raise serializers.ValidationError({
+                        'contact_name': 'Contact Name is required.'
+                    })
+            
+            if 'contact_phone' in data:
+                contact_phone_str = contact_phone.strip() if contact_phone else ''
+                if not contact_phone_str:
+                    raise serializers.ValidationError({
+                        'contact_phone': 'Contact Phone is required.'
+                    })
+        
+        return data
+    
     def to_representation(self, instance):
         """Remove contact_name and contact_phone for non-admin users"""
         representation = super().to_representation(instance)
