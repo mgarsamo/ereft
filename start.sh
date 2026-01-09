@@ -96,9 +96,29 @@ echo "📊 Current database state:"
 echo "   - Users: $USER_COUNT"
 echo "   - Properties: $PROP_COUNT"
 
-# ONLY populate if database is empty (0 users AND 0 properties)
-if [ "$USER_COUNT" -eq "0" ] && [ "$PROP_COUNT" -eq "0" ]; then
-    echo "✅ Database is empty - populating sample data..."
+# Check if we should populate sample data
+# SAFE: populate_sample_data only ADDS properties, never deletes existing ones
+# It uses get_or_create with title, so it won't create duplicates
+SAMPLE_PROP_COUNT=$(python manage.py shell -c "
+import os
+os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
+import django
+django.setup()
+from listings.models import Property
+from django.contrib.auth.models import User
+agent = User.objects.filter(username='melaku_agent').first()
+if agent:
+    print(Property.objects.filter(owner=agent).count())
+else:
+    print(0)
+" 2>/dev/null | tail -1 || echo "0")
+
+echo "📊 Sample properties currently in database: $SAMPLE_PROP_COUNT"
+
+# Always run populate_sample_data - it's safe (only adds, never deletes)
+# It will add the 260 new properties + 24 original ones = 284 total sample properties
+if [ "$SAMPLE_PROP_COUNT" -lt "280" ]; then
+    echo "✅ Populating sample data (safe - only adds, never deletes)..."
     echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
     echo ""
     
@@ -114,9 +134,8 @@ if [ "$USER_COUNT" -eq "0" ] && [ "$PROP_COUNT" -eq "0" ]; then
         echo "⚠️ Check the logs above for error details."
     fi
 else
-    echo "⏭️  Database has existing data ($USER_COUNT users, $PROP_COUNT properties)"
-    echo "✅ SKIPPING sample data population to protect existing data"
-    echo "   Sample data will only be added if database is completely empty"
+    echo "✅ Sample data already populated ($SAMPLE_PROP_COUNT sample properties found)"
+    echo "⏭️  Skipping sample data population (already have sufficient sample data)"
 fi
 
 echo "============================================================"
