@@ -16,12 +16,26 @@ def is_admin_user(user):
     """Check if user is admin (superuser, staff, or specific admin emails)"""
     if not user.is_authenticated:
         return False
+    
     # Simple admin check: superuser, staff, or specific admin emails
     if user.is_superuser or user.is_staff:
         return True
+    
     admin_emails = ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
-    if hasattr(user, 'email') and user.email in admin_emails:
-        return True
+    
+    # Check email (case-insensitive, strip whitespace)
+    if hasattr(user, 'email') and user.email:
+        user_email = user.email.strip().lower()
+        admin_emails_lower = [email.strip().lower() for email in admin_emails]
+        if user_email in admin_emails_lower:
+            # Auto-grant admin privileges if email matches but flags aren't set
+            if not user.is_staff or not user.is_superuser:
+                user.is_staff = True
+                user.is_superuser = True
+                user.is_active = True
+                user.save(update_fields=['is_staff', 'is_superuser', 'is_active'])
+            return True
+    
     return False
 
 @api_view(['GET'])
