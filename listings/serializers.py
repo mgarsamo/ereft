@@ -334,6 +334,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
             'address', 'city', 'sub_city', 'kebele', 'bedrooms', 'bathrooms',
             'area_sqm', 'images', 'primary_image', 'is_favorited', 'created_at', 'status'
         ]
+        # Note: contact_name and contact_phone are NOT in fields list, so they won't be included
     
     def get_primary_image(self, obj):
         primary_image = obj.images.filter(is_primary=True).first()
