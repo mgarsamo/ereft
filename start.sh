@@ -67,18 +67,23 @@ except Exception as e:
     traceback.print_exc()
 " 2>&1 || echo "⚠️ Could not verify database connection"
 
-# Populate sample data AUTOMATICALLY on every deployment
-# IMPORTANT: This only adds sample data, NEVER deletes user-created properties
-# This runs AFTER database verification to ensure we're using PostgreSQL
+# Populate sample data ONLY if database is empty (SAFETY: Never overwrite existing data)
+# This runs AFTER migrations and database verification to ensure we're using PostgreSQL
 echo ""
-echo "🏠 AUTOMATIC SAMPLE DATA POPULATION"
+echo "🏠 SAMPLE DATA POPULATION CHECK"
 echo "============================================================"
-echo "🔄 Running populate_sample_data automatically on deployment..."
-echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
-echo ""
 
-# Suppress database config output when getting initial count
-INITIAL_COUNT=$(python manage.py shell -c "
+# Check if database has existing data (AFTER migrations have run)
+USER_COUNT=$(python manage.py shell -c "
+import os
+os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
+import django
+django.setup()
+from django.contrib.auth.models import User
+print(User.objects.count())
+" 2>/dev/null | tail -1 || echo "0")
+
+PROP_COUNT=$(python manage.py shell -c "
 import os
 os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
 import django
@@ -87,58 +92,31 @@ from listings.models import Property
 print(Property.objects.count())
 " 2>/dev/null | tail -1 || echo "0")
 
-echo "📊 Initial property count: $INITIAL_COUNT"
+echo "📊 Current database state:"
+echo "   - Users: $USER_COUNT"
+echo "   - Properties: $PROP_COUNT"
 
-# Run populate_sample_data with explicit error handling and full output
-echo "📝 Executing: python manage.py populate_sample_data"
-python manage.py populate_sample_data 2>&1
-EXIT_CODE=$?
-
-echo ""
-echo "============================================================"
-
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "✅ Sample data population command completed successfully"
+# ONLY populate if database is empty (0 users AND 0 properties)
+if [ "$USER_COUNT" -eq "0" ] && [ "$PROP_COUNT" -eq "0" ]; then
+    echo "✅ Database is empty - populating sample data..."
+    echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
+    echo ""
     
-    # Verify properties were created (suppress config output)
-    sleep 3  # Give database a moment to commit all transactions
-    echo "🔍 Verifying properties were created..."
+    # Run populate_sample_data with explicit error handling and full output
+    echo "📝 Executing: python manage.py populate_sample_data"
+    python manage.py populate_sample_data 2>&1
+    EXIT_CODE=$?
     
-    FINAL_COUNT=$(python manage.py shell -c "
-import os
-os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
-import django
-django.setup()
-from listings.models import Property
-print(Property.objects.count())
-" 2>/dev/null | tail -1 || echo "0")
-    
-    SAMPLE_COUNT=$(python manage.py shell -c "
-import os
-os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
-import django
-django.setup()
-from listings.models import Property, User
-agent = User.objects.filter(username='melaku_agent').first()
-if agent:
-    print(Property.objects.filter(owner=agent).count())
-else:
-    print(0)
-" 2>/dev/null | tail -1 || echo "0")
-    
-    echo "📊 Final property count: $FINAL_COUNT"
-    echo "📊 Sample properties: $SAMPLE_COUNT"
-    
-    if [ "$SAMPLE_COUNT" -lt "20" ]; then
-        echo "⚠️ WARNING: Only $SAMPLE_COUNT sample properties found. Expected ~24."
-        echo "⚠️ This might indicate an issue. Check logs above for details."
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "✅ Sample data population completed successfully"
     else
-        echo "✅ Sample data population successful! $SAMPLE_COUNT sample properties available."
+        echo "❌ Sample data population failed with exit code: $EXIT_CODE"
+        echo "⚠️ Check the logs above for error details."
     fi
 else
-    echo "❌ Sample data population failed with exit code: $EXIT_CODE"
-    echo "⚠️ Check the logs above for error details."
-    echo "⚠️ The application will continue, but sample data may not be available."
+    echo "⏭️  Database has existing data ($USER_COUNT users, $PROP_COUNT properties)"
+    echo "✅ SKIPPING sample data population to protect existing data"
+    echo "   Sample data will only be added if database is completely empty"
 fi
 
 echo "============================================================"
