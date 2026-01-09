@@ -1285,17 +1285,113 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # Proceed with update
-        partial = kwargs.pop('partial', False)
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        # CRITICAL: Handle images separately if provided (similar to create method)
+        images_data = []
+        request_data_copy = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
         
-        # Clear cache
+        # Extract images from request data if present
+        if 'images' in request_data_copy:
+            images_value = request_data_copy.pop('images')
+            
+            # Handle images as list (JSON array from frontend)
+            if isinstance(images_value, list):
+                print(f"🔄 PropertyViewSet.update: Received {len(images_value)} images in update request")
+                for idx, image_value in enumerate(images_value, 1):
+                    if isinstance(image_value, dict):
+                        url = image_value.get('url') or image_value.get('secure_url') or image_value.get('public_id')
+                    else:
+                        url = str(image_value).strip()
+                    
+                    if url and url not in ['None', 'null', ''] and len(url) > 5:
+                        # Extract public_id if it's a full URL, or use as-is if it's already a public_id
+                        public_id = url
+                        if url.startswith('http://') or url.startswith('https://'):
+                            # Extract public_id from Cloudinary URL
+                            if '/image/upload/' in url:
+                                parts = url.split('/image/upload/')
+                                if len(parts) > 1:
+                                    path_part = parts[1].split('?')[0].split('.')[0]  # Remove query params and extension
+                                    if '/' in path_part:
+                                        path_part = path_part.split('/')[-1]  # Get last part if versioned
+                                    public_id = path_part if path_part else url
+                                else:
+                                    public_id = url
+                            else:
+                                public_id = url
+                        else:
+                            # It's already a public_id
+                            public_id = url.strip()
+                        
+                        # Validate public_id format
+                        if public_id and len(public_id) >= 5:
+                            images_data.append(public_id)
+                            print(f"   ✅ Image {idx}: public_id='{public_id[:50]}...'")
+            elif isinstance(images_value, str):
+                # Single image string
+                images_data.append(images_value.strip())
+            # Empty list means delete all images
+            elif images_value == [] or (isinstance(images_value, list) and len(images_value) == 0):
+                print(f"🔄 PropertyViewSet.update: Empty images array - will delete all existing images")
+        
+        # Proceed with update (without images - we'll handle them separately)
+        partial = kwargs.pop('partial', False)
+        serializer = self.get_serializer(instance, data=request_data_copy, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        property_obj = serializer.save()
+        
+        # CRITICAL: Handle image updates - replace all existing images with new set
+        if 'images' in request.data:  # If images were explicitly provided
+            print(f"🔄 PropertyViewSet.update: Updating images for property {property_obj.id}")
+            
+            # Delete all existing PropertyImage objects for this property
+            from .models import PropertyImage
+            existing_images_count = PropertyImage.objects.filter(property=property_obj).count()
+            PropertyImage.objects.filter(property=property_obj).delete()
+            print(f"   🗑️ Deleted {existing_images_count} existing PropertyImage objects")
+            
+            # Create new PropertyImage objects from the provided images
+            if images_data:
+                print(f"   📸 Creating {len(images_data)} new PropertyImage objects")
+                for i, public_id in enumerate(images_data[:4], 1):  # Limit to 4 images
+                    try:
+                        # Clean up public_id (remove any brackets or quotes)
+                        import re
+                        public_id = str(public_id).strip().strip("'\"").strip()
+                        public_id = re.sub(r'[\[\]]', '', public_id)
+                        
+                        if public_id and len(public_id) >= 5:
+                            prop_image = PropertyImage.objects.create(
+                                property=property_obj,
+                                image=public_id,  # Store public_id as string
+                                is_primary=(i == 1),
+                                order=i
+                            )
+                            print(f"   ✅ Created PropertyImage {i}: ID={prop_image.id}, public_id='{public_id[:50]}...'")
+                    except Exception as img_error:
+                        print(f"   ❌ Error creating PropertyImage {i}: {img_error}")
+                        continue
+                
+                # Force database commit
+                from django.db import transaction
+                transaction.commit()
+                print(f"   ✅ Successfully updated images for property {property_obj.id}")
+            else:
+                print(f"   ℹ️ No images provided - all images removed from property {property_obj.id}")
+        else:
+            print(f"🔄 PropertyViewSet.update: Images not provided in update - keeping existing images")
+        
+        # Clear cache and reload property with images
         cache.delete(f"property_detail:{instance.id}")
         cache.clear()
         
-        return Response(serializer.data)
+        # Reload property with images prefetched for response
+        property_obj.refresh_from_db()
+        property_obj = Property.objects.prefetch_related('images').select_related('owner', 'agent').get(id=property_obj.id)
+        
+        # Serialize updated property
+        response_serializer = self.get_serializer(property_obj)
+        
+        return Response(response_serializer.data)
     
     def partial_update(self, request, *args, **kwargs):
         """Partial update a property - users can only update their own, admins can update any"""
