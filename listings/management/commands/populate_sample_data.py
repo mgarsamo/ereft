@@ -52,20 +52,56 @@ class Command(BaseCommand):
             "Akaki Kality": (8.950, 38.740)
         }
         
+        # Extensive image sets from Pexels for better variety
         image_sets = {
-            "house": ["1396122", "186077", "280229", "1029599", "2635038", "1571460", "1643383", "1648776", "1438832", "1571468", "280222", "1396132", "259588", "1571471", "1643384"],
-            "apartment": ["1457842", "271624", "271795", "1457847", "1329711", "439227", "1918291", "1643383", "1571460", "271643", "1457846", "1329712", "271796", "1457848"],
-            "condo": ["1643383", "1571463", "1350789", "259962", "271643", "1457842", "271624", "1643384"],
-            "townhouse": ["1438832", "1396122", "259588", "1571468", "1396132", "1438833", "1571469"],
-            "land": ["1105766", "1268871", "1179229", "1105767", "1268872", "1105768"],
-            "commercial": ["380768", "1181406", "1643389", "3184299", "1267338", "1267360", "1181407", "380769"]
+            "house": [
+                "1396122", "186077", "280229", "1029599", "2635038", "1571460", "1643383", "1648776", 
+                "1438832", "1571468", "280222", "1396132", "259588", "1571471", "1643384", "280233",
+                "1024311", "280221", "106399", "106399", "1396138", "280223", "271743", "106399",
+                "1571463", "1648768", "1396131", "1571469", "1648778", "280232", "1571470", "271724",
+                "1396127", "1643385", "1571472", "280234", "271742", "1396135", "1648779", "271728",
+                "1571473", "280236", "1396139", "1643386", "271729", "1571474", "280237", "271730"
+            ],
+            "apartment": [
+                "1457842", "271624", "271795", "1457847", "1329711", "439227", "1918291", "1643383", 
+                "1571460", "271643", "1457846", "1329712", "271796", "1457848", "271625", "271626",
+                "271627", "1457849", "1329713", "271628", "271797", "1457850", "271629", "271798",
+                "271630", "1457851", "1329714", "271631", "271799", "1457852", "271632", "271800",
+                "271633", "1457853", "271634", "271801", "271635", "1457854", "271636", "271802",
+                "271637", "1457855", "271638", "271803", "271639", "1457856", "271640", "271804"
+            ],
+            "condo": [
+                "1643383", "1571463", "1350789", "259962", "271643", "1457842", "271624", "1643384",
+                "271641", "271642", "259963", "1350790", "1571464", "1643385", "271644", "271645",
+                "259964", "1350791", "1571465", "1643386", "271646", "271647", "259965", "1350792",
+                "1571466", "1643387", "271648", "271649", "259966", "1350793", "1571467", "1643388"
+            ],
+            "townhouse": [
+                "1438832", "1396122", "259588", "1571468", "1396132", "1438833", "1571469", "259589",
+                "1438834", "1396133", "1571470", "259590", "1438835", "1396134", "1571471", "259591",
+                "1438836", "1396135", "1571472", "259592", "1438837", "1396136", "1571473", "259593"
+            ],
+            "land": [
+                "1105766", "1268871", "1179229", "1105767", "1268872", "1105768", "1179230", "1268873",
+                "1105769", "1179231", "1268874", "1105770", "1179232", "1268875", "1105771", "1179233",
+                "1268876", "1105772", "1179234", "1268877", "1105773", "1179235", "1268878", "1105774"
+            ],
+            "commercial": [
+                "380768", "1181406", "1643389", "3184299", "1267338", "1267360", "1181407", "380769",
+                "1181408", "1643390", "3184300", "1267339", "1267361", "1181409", "380770", "1181410",
+                "1643391", "3184301", "1267340", "1267362", "1181411", "380771", "1181412", "1643392",
+                "3184302", "1267341", "1267363", "1181413", "380772", "1181414", "1643393", "3184303"
+            ]
         }
         
         properties = []
-        for i in range(260):
+        # Generate 500 more properties for better coverage with improved stratification
+        for i in range(500):
             property_type = random.choices(property_types, weights=property_weights)[0]
-            listing_type = random.choice(listing_types)
-            sub_city = random.choice(sub_cities)
+            listing_type = random.choices(listing_types, weights=listing_weights)[0]
+            # Ensure better geographic distribution - weighted by popularity
+            city_weights = [0.25, 0.15, 0.12, 0.10, 0.10, 0.10, 0.08, 0.05, 0.03, 0.02]  # Bole most popular, etc.
+            sub_city = random.choices(sub_cities, weights=city_weights)[0]
             
             price_min, price_max = price_ranges[property_type][listing_type]
             price = Decimal(str(random.randint(price_min, price_max)))
@@ -90,8 +126,10 @@ class Command(BaseCommand):
             contact_phone = f"{prefix}{''.join([str(random.randint(0, 9)) for _ in range(6)])}"
             
             image_ids = image_sets.get(property_type, image_sets["house"])
-            selected = random.sample(image_ids, min(3, len(image_ids)))
-            images = [{'url': f'https://images.pexels.com/photos/{img_id}/pexels-photo-{img_id}.jpeg?auto=compress&cs=tinysrgb&w=1200', 'caption': f'{property_type.capitalize()} image {idx+1}'} for idx, img_id in enumerate(selected)]
+            # Select 3-5 images for better visual appeal
+            num_images = random.randint(3, min(5, len(image_ids)))
+            selected = random.sample(image_ids, num_images)
+            images = [{'url': f'https://images.pexels.com/photos/{img_id}/pexels-photo-{img_id}.jpeg?auto=compress&cs=tinysrgb&w=1200', 'caption': f'{property_type.capitalize()} view {idx+1}'} for idx, img_id in enumerate(selected)]
             
             has_garage = random.choice([True, False]) if property_type != "apartment" else random.choice([True, False, False])
             has_pool = random.choice([True, False, False]) if property_type in ["house", "condo"] else False
@@ -141,25 +179,69 @@ class Command(BaseCommand):
                     f"Retail Space in {sub_city}"
                 ])
             
+            # More detailed and varied descriptions
             if property_type == "house":
-                description = f"Beautiful {bedrooms}-bedroom house in {sub_city}. Perfect for families with modern amenities and great location."
+                desc_options = [
+                    f"Beautiful {bedrooms}-bedroom house in {sub_city}. Perfect for families with modern amenities and great location.",
+                    f"Stunning {bedrooms}-bedroom family home in {sub_city}. Features include spacious living areas, modern kitchen, and private garden.",
+                    f"Elegant {bedrooms}-bedroom residence in {sub_city}. Well-maintained property with excellent security and prime location.",
+                    f"Contemporary {bedrooms}-bedroom home in {sub_city}. Close to schools, shopping, and transportation hubs.",
+                    f"Premium {bedrooms}-bedroom house in {sub_city}. Perfect investment opportunity or family residence."
+                ]
+                description = random.choice(desc_options)
             elif property_type == "apartment":
-                description = f"Modern {bedrooms}-bedroom apartment in {sub_city}. Close to amenities, schools, and shopping centers."
+                desc_options = [
+                    f"Modern {bedrooms}-bedroom apartment in {sub_city}. Close to amenities, schools, and shopping centers.",
+                    f"Cozy {bedrooms}-bedroom unit in {sub_city}. Well-lit spaces with modern finishes and great building amenities.",
+                    f"Stylish {bedrooms}-bedroom apartment in {sub_city}. Secure building with parking and excellent location.",
+                    f"Spacious {bedrooms}-bedroom flat in {sub_city}. Perfect for professionals or small families.",
+                    f"Bright {bedrooms}-bedroom apartment in {sub_city}. Recently renovated with quality finishes."
+                ]
+                description = random.choice(desc_options)
             elif property_type == "condo":
-                description = f"Elegant {bedrooms}-bedroom condo in {sub_city}. Building features include security and modern facilities."
+                desc_options = [
+                    f"Elegant {bedrooms}-bedroom condo in {sub_city}. Building features include security, gym, and modern facilities.",
+                    f"Luxury {bedrooms}-bedroom condominium in {sub_city}. High-end finishes and premium building amenities.",
+                    f"Contemporary {bedrooms}-bedroom condo in {sub_city}. Secure building with excellent location and views."
+                ]
+                description = random.choice(desc_options)
             elif property_type == "townhouse":
-                description = f"Spacious {bedrooms}-bedroom townhouse in {sub_city}. Great for families seeking privacy and community."
+                desc_options = [
+                    f"Spacious {bedrooms}-bedroom townhouse in {sub_city}. Great for families seeking privacy and community living.",
+                    f"Modern {bedrooms}-bedroom townhome in {sub_city}. Private parking and garden area included.",
+                    f"Elegant {bedrooms}-bedroom townhouse in {sub_city}. Well-designed layout with excellent natural light."
+                ]
+                description = random.choice(desc_options)
             elif property_type == "land":
-                description = f"Prime {area_sqm}sqm land plot in {sub_city}. Perfect for development or investment. Road access and utilities available."
+                desc_options = [
+                    f"Prime {area_sqm}sqm land plot in {sub_city}. Perfect for development or investment. Road access and utilities available.",
+                    f"Excellent {area_sqm}sqm development land in {sub_city}. Strategic location with great investment potential.",
+                    f"Buildable {area_sqm}sqm land parcel in {sub_city}. All permits in place, ready for construction.",
+                    f"Investment land plot in {sub_city}. {area_sqm}sqm of prime real estate with excellent growth potential."
+                ]
+                description = random.choice(desc_options)
             else:  # commercial
-                description = f"Excellent commercial space in {sub_city}. {area_sqm}sqm of prime retail/office space in high-traffic area."
+                desc_options = [
+                    f"Excellent commercial space in {sub_city}. {area_sqm}sqm of prime retail/office space in high-traffic area.",
+                    f"Prime commercial property in {sub_city}. {area_sqm}sqm ideal for retail, office, or restaurant use.",
+                    f"Strategic commercial location in {sub_city}. {area_sqm}sqm space perfect for business establishment.",
+                    f"Premium commercial space in {sub_city}. {area_sqm}sqm with excellent visibility and accessibility."
+                ]
+                description = random.choice(desc_options)
             
-            street_names = ["Main Street", "Churchill Road", "Ras Abebe Aregay Street", "Ethiopia Street", "Unity Road"]
+            # More diverse street names for realism
+            street_names = [
+                "Main Street", "Churchill Road", "Ras Abebe Aregay Street", "Ethiopia Street", "Unity Road",
+                "Hailu Street", "Meskel Square", "Ras Desta Damtew Avenue", "Bole Road", "Airport Road",
+                "22 Mazoria", "Cazanchise", "Gerji", "CMC Road", "Gotera", "Kazanchis", "La Gare", "Piazza",
+                "Saris", "Wollo Sefer", "Megenagna", "Sar Bet", "Hayahulet", "Bole Bulbula", "Lebu", "Old Airport"
+            ]
             street = random.choice(street_names)
             house_num = random.randint(1, 999)
             address = f"{house_num} {street}, {sub_city}, Addis Ababa"
             kebele = str(random.randint(1, 20))
-            is_featured = random.random() < 0.10
+            # Featured properties: 8% chance (good distribution but not too many)
+            is_featured = random.random() < 0.08
             
             prop_data = {
                 'title': title,
@@ -865,11 +947,11 @@ class Command(BaseCommand):
             },
         ]
         
-        # Generate 260 additional diverse properties with contact info
-        self.stdout.write('🔄 Generating 260 additional diverse properties...')
-        additional_properties = self._generate_260_properties()
+        # Generate 500 additional diverse properties with contact info and extensive image sets
+        self.stdout.write('🔄 Generating 500 additional diverse properties with extensive image coverage...')
+        additional_properties = self._generate_260_properties()  # Function name is legacy, but generates 500 now
         sample_properties.extend(additional_properties)
-        self.stdout.write(f'✅ Generated {len(additional_properties)} additional properties')
+        self.stdout.write(f'✅ Generated {len(additional_properties)} additional properties with stratified distribution')
         
         properties_created = 0
         properties_updated = 0

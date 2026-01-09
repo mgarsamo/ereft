@@ -116,8 +116,8 @@ else:
 echo "📊 Sample properties currently in database: $SAMPLE_PROP_COUNT"
 
 # Always run populate_sample_data - it's safe (only adds, never deletes)
-# It will add the 260 new properties + 24 original ones = 284 total sample properties
-if [ "$SAMPLE_PROP_COUNT" -lt "280" ]; then
+# It will add the 500 new properties + 24 original ones = 524 total sample properties
+if [ "$SAMPLE_PROP_COUNT" -lt "520" ]; then
     echo "✅ Populating sample data (safe - only adds, never deletes)..."
     echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
     echo ""
