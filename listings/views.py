@@ -1266,7 +1266,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         user = request.user
         
         # Check if user is admin (staff or superuser)
-        is_admin = user.is_staff or user.is_superuser or user.email in ['admin@ereft.com', 'melaku.garsamo@gmail.com']
+        is_admin = user.is_staff or user.is_superuser or user.email in ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
         
         # Verify ownership (unless admin)
         if not is_admin and (not instance.owner or instance.owner_id != user.id):
@@ -1453,7 +1453,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         user = request.user
         
         # Check if user is admin
-        is_admin = user.is_staff or user.is_superuser or user.email in ['admin@ereft.com', 'melaku.garsamo@gmail.com']
+        is_admin = user.is_staff or user.is_superuser or user.email in ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
         
         if not is_admin:
             return Response(
@@ -2398,8 +2398,9 @@ def process_google_oauth_code(code, request):
         
         print(f"🔐 Google OAuth: User info received: {email}")
         
-        # AUTO-ADMIN: Ensure melaku.garsamo@gmail.com is admin
-        is_admin_email = email == 'melaku.garsamo@gmail.com'
+        # AUTO-ADMIN: Ensure admin emails have admin privileges
+        admin_emails = ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
+        is_admin_email = email in admin_emails
         
         # Check if user already exists (handle duplicate emails)
         user = User.objects.filter(email=email).first()
@@ -2410,7 +2411,7 @@ def process_google_oauth_code(code, request):
             user.first_name = first_name
             user.last_name = last_name
             
-            # AUTO-ADMIN: Set admin privileges for melaku.garsamo@gmail.com
+            # AUTO-ADMIN: Set admin privileges for admin emails
             if is_admin_email:
                 user.is_staff = True
                 user.is_superuser = True
