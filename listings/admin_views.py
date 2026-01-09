@@ -197,6 +197,8 @@ def admin_all_properties(request):
             'views_count': prop.views_count,
             'created_at': prop.created_at.isoformat() if prop.created_at else None,
             'updated_at': prop.updated_at.isoformat() if prop.updated_at else None,
+            'contact_name': getattr(prop, 'contact_name', None),
+            'contact_phone': getattr(prop, 'contact_phone', None),
             'owner': {
                 'id': prop.owner.id,
                 'username': prop.owner.username,

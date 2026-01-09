@@ -398,7 +398,7 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
             'country', 'latitude', 'longitude',
             'bedrooms', 'bathrooms', 'area_sqm', 'lot_size_sqm', 'year_built',
             'has_garage', 'has_pool', 'has_garden', 'has_balcony', 'is_furnished',
-            'has_air_conditioning', 'has_heating', 'images'
+            'has_air_conditioning', 'has_heating', 'contact_name', 'contact_phone', 'images'
         ]
     
     # Note: Property creation is handled by perform_create in views.py

@@ -115,6 +115,10 @@ class Property(models.Model):
     is_active = models.BooleanField(default=True)
     views_count = models.PositiveIntegerField(default=0)
     
+    # Listing Contact Information (Optional - nullable, safe for existing data)
+    contact_name = models.CharField(max_length=255, blank=True, null=True)
+    contact_phone = models.CharField(max_length=50, blank=True, null=True)
+    
     # Relationships
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_properties')
     agent = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='agent_properties')
