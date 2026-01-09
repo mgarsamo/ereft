@@ -66,6 +66,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
             return PropertyCreateSerializer
         elif self.action == 'retrieve':
             return PropertyDetailSerializer
+        elif self.action == 'update' or self.action == 'partial_update':
+            return PropertyDetailSerializer  # Use PropertyDetailSerializer for updates to support all fields including contact info
         else:
             return PropertyListSerializer
 
