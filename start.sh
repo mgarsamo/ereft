@@ -115,12 +115,28 @@ else:
 
 echo "📊 Sample properties currently in database: $SAMPLE_PROP_COUNT"
 
-# DISABLED: Auto-population of sample data to prevent unwanted seeding
-# To manually populate sample data, run: python manage.py populate_sample_data
-# Auto-population is disabled to prevent adding properties on every deployment
-echo "⏭️  Auto-population of sample data is DISABLED"
-echo "   To manually populate sample data, run: python manage.py populate_sample_data"
-echo "   Current sample properties: $SAMPLE_PROP_COUNT"
+# Check if vacation homes exist - if not, populate sample data (including vacation homes)
+VACATION_HOME_COUNT=$(python manage.py shell -c "
+import os
+os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
+import django
+django.setup()
+from listings.models import Property
+print(Property.objects.filter(property_type='vacation_home').count())
+" 2>/dev/null | tail -1 || echo "0")
+
+echo "📊 Vacation homes currently in database: $VACATION_HOME_COUNT"
+
+# Auto-populate if vacation homes are missing (safe - uses get_or_create, won't create duplicates)
+if [ "$VACATION_HOME_COUNT" -lt "40" ]; then
+    echo "✅ Vacation homes missing - populating sample data (including vacation homes)..."
+    echo "   This will add vacation homes and update any existing sample properties"
+    python manage.py populate_sample_data 2>&1
+    echo "✅ Sample data population completed"
+else
+    echo "✅ Vacation homes already exist ($VACATION_HOME_COUNT found)"
+    echo "⏭️  Skipping sample data population (vacation homes already seeded)"
+fi
 
 # OLD CODE (DISABLED):
 # if [ "$SAMPLE_PROP_COUNT" -lt "520" ]; then
