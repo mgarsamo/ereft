@@ -399,91 +399,73 @@ def admin_bulk_delete_properties(request):
                         
                         print(f"[BULK DELETE] Processing property: {prop_id} - {prop_title}")
                         
-                        # Handle payments table if it exists (same as destroy method)
-                        payments_table_exists = False
+                        # Use raw SQL deletion directly to avoid Django ORM issues with missing tables
+                        # This bypasses all CASCADE checks and table existence issues
+                        # This is more reliable and doesn't depend on CASCADE relationships or table existence
                         try:
+                            print(f"[BULK DELETE]   Deleting via raw SQL (reliable method)...")
                             with connection.cursor() as cursor:
-                                if 'sqlite' in connection.vendor:
-                                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='payments_payment'")
-                                else:  # PostgreSQL
-                                    cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='payments_payment'")
-                                payments_table_exists = cursor.fetchone() is not None
-                        except Exception:
-                            payments_table_exists = False
-                        
-                        # Update payments if table exists
-                        if payments_table_exists:
-                            try:
-                                from django.apps import apps
-                                payment_model = apps.get_model('payments', 'Payment')
-                                payments = payment_model.objects.filter(property=prop)
-                                if payments.exists():
-                                    payments.update(property=None)
-                                    print(f"[BULK DELETE]   Updated {payments.count()} payment records")
-                            except Exception:
-                                pass  # Skip if payments model not accessible
-                        
-                        # Delete the property itself - let CASCADE handle related objects
-                        # This is simpler and more reliable than manual deletion
-                        try:
-                            # Try Django ORM deletion (CASCADE will handle related objects)
-                            prop.delete()
-                            print(f"[BULK DELETE]   ✓ Property deleted via Django ORM: {prop_id}")
-                            
-                            # Verify deletion immediately within transaction
-                            if Property.objects.filter(id=prop_uuid).exists():
-                                raise Exception(f"Property {prop_id} still exists after delete() - transaction may be rolled back")
-                            
-                            deleted_count += 1
-                            deleted_ids.append(prop_id)
-                            # Release savepoint on success
-                            transaction.savepoint_commit(savepoint_id)
-                            
-                        except Exception as orm_error:
-                            error_str = str(orm_error)
-                            error_type = type(orm_error).__name__
-                            print(f"[BULK DELETE]   ⚠️ Django ORM deletion failed: {error_type}: {error_str}")
-                            
-                            # Check if it's a constraint error
-                            if 'constraint' in error_str.lower() or 'foreign key' in error_str.lower():
-                                print(f"[BULK DELETE]   ⚠️  Database constraint issue - trying raw SQL fallback...")
-                            
-                            # Fallback to raw SQL if ORM fails (same as destroy method)
-                            try:
-                                print(f"[BULK DELETE]   Attempting raw SQL deletion fallback...")
-                                with connection.cursor() as cursor:
-                                    # Delete related objects via raw SQL first
-                                    cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [prop_uuid])
-                                    cursor.execute("DELETE FROM listings_favorite WHERE property_id = %s", [prop_uuid])
-                                    cursor.execute("DELETE FROM listings_propertyview WHERE property_id = %s", [prop_uuid])
-                                    cursor.execute("DELETE FROM listings_contact WHERE property_id = %s", [prop_uuid])
+                                # Delete all related objects via raw SQL first (in correct order to avoid constraint issues)
+                                # Order matters: delete dependent objects before the main object
+                                try:
                                     cursor.execute("DELETE FROM listings_propertyreview WHERE property_id = %s", [prop_uuid])
-                                    
-                                    # Delete the property itself
-                                    cursor.execute("DELETE FROM listings_property WHERE id = %s", [prop_uuid])
-                                    
-                                    # Verify deletion
-                                    cursor.execute("SELECT COUNT(*) FROM listings_property WHERE id = %s", [prop_uuid])
-                                    remaining = cursor.fetchone()[0]
-                                    
-                                    if remaining > 0:
-                                        raise Exception(f"Property {prop_id} still exists after raw SQL deletion")
-                                    
-                                    print(f"[BULK DELETE]   ✓ Property deleted via raw SQL: {prop_id}")
-                                    deleted_count += 1
-                                    deleted_ids.append(prop_id)
-                                    # Release savepoint on success
-                                    transaction.savepoint_commit(savepoint_id)
-                            except Exception as sql_error:
-                                error_type_sql = type(sql_error).__name__
-                                error_str_sql = str(sql_error)
-                                print(f"[BULK DELETE]   ✗ Raw SQL deletion also failed: {error_type_sql}: {error_str_sql}")
-                                import traceback
-                                traceback.print_exc()
-                                # Rollback this savepoint and continue to next property
+                                except Exception:
+                                    pass  # Table might not exist
+                                
+                                try:
+                                    cursor.execute("DELETE FROM listings_contact WHERE property_id = %s", [prop_uuid])
+                                except Exception:
+                                    pass
+                                
+                                try:
+                                    cursor.execute("DELETE FROM listings_propertyview WHERE property_id = %s", [prop_uuid])
+                                except Exception:
+                                    pass
+                                
+                                try:
+                                    cursor.execute("DELETE FROM listings_favorite WHERE property_id = %s", [prop_uuid])
+                                except Exception:
+                                    pass
+                                
+                                try:
+                                    cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [prop_uuid])
+                                except Exception:
+                                    pass
+                                
+                                # Delete the property itself
+                                cursor.execute("DELETE FROM listings_property WHERE id = %s", [prop_uuid])
+                                
+                                # Verify deletion
+                                cursor.execute("SELECT COUNT(*) FROM listings_property WHERE id = %s", [prop_uuid])
+                                remaining = cursor.fetchone()[0]
+                                
+                                if remaining > 0:
+                                    raise Exception(f"Property {prop_id} still exists after raw SQL deletion")
+                                
+                                print(f"[BULK DELETE]   ✓ Property deleted via raw SQL: {prop_id}")
+                                deleted_count += 1
+                                deleted_ids.append(prop_id)
+                                # Release savepoint on success
+                                transaction.savepoint_commit(savepoint_id)
+                                
+                        except Exception as sql_error:
+                            error_type_sql = type(sql_error).__name__
+                            error_str_sql = str(sql_error)
+                            print(f"[BULK DELETE]   ✗ Raw SQL deletion failed: {error_type_sql}: {error_str_sql}")
+                            
+                            # Check if it's a transaction abort error
+                            if 'transaction is aborted' in error_str_sql.lower():
+                                print(f"[BULK DELETE]   ⚠️ Transaction was aborted - rolling back savepoint and continuing...")
+                            
+                            import traceback
+                            traceback.print_exc()
+                            # Rollback this savepoint and continue to next property
+                            try:
                                 transaction.savepoint_rollback(savepoint_id)
-                                not_found_ids.append(prop_id_str)
-                                continue  # CRITICAL: Skip to next property
+                            except Exception:
+                                pass  # Savepoint may already be rolled back
+                            not_found_ids.append(prop_id_str)
+                            continue  # CRITICAL: Skip to next property
                         
                     except Property.DoesNotExist:
                         print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found (DoesNotExist)")
