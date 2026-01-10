@@ -360,9 +360,23 @@ def admin_bulk_delete_properties(request):
     try:
         print(f"[BULK DELETE] Starting deletion of {len(property_ids)} properties")
         print(f"[BULK DELETE] Property IDs (first 10): {property_ids[:10]}")
+        print(f"[BULK DELETE] Property ID types (first 5): {[type(pid).__name__ for pid in property_ids[:5]]}")
         
-        # Convert all IDs to strings for consistency
+        # Convert all IDs to strings for display, but keep original format for queries
         property_ids_clean = [str(pid) for pid in property_ids]
+        
+        # Also prepare UUID objects for database queries (Django handles both, but being explicit)
+        from uuid import UUID
+        property_uuids = []
+        for pid in property_ids:
+            try:
+                if isinstance(pid, str):
+                    property_uuids.append(UUID(pid))
+                else:
+                    property_uuids.append(pid)
+            except (ValueError, TypeError):
+                # If UUID conversion fails, use original
+                property_uuids.append(pid)
         
         # Perform deletions in a transaction
         # Use the same pattern as PropertyViewSet.destroy for consistency
@@ -492,9 +506,15 @@ def admin_bulk_delete_properties(request):
             import time
             time.sleep(0.5)
             
-            # Use a fresh query to verify deletion
-            remaining_properties = Property.objects.filter(id__in=property_ids_clean)
-            remaining_count = remaining_properties.count()
+            # Use a fresh query to verify deletion - try both string and UUID formats
+            # Django should handle both, but try both to be sure
+            try:
+                remaining_properties = Property.objects.filter(id__in=property_uuids)
+                remaining_count = remaining_properties.count()
+            except Exception as uuid_error:
+                print(f"[BULK DELETE] UUID filter failed, trying string IDs: {str(uuid_error)}")
+                remaining_properties = Property.objects.filter(id__in=property_ids_clean)
+                remaining_count = remaining_properties.count()
             
             if remaining_count > 0:
                 remaining_ids = list(remaining_properties.values_list('id', flat=True))
