@@ -115,28 +115,21 @@ else:
 
 echo "📊 Sample properties currently in database: $SAMPLE_PROP_COUNT"
 
-# Always run populate_sample_data - it's safe (only adds, never deletes)
-# It will add the 500 new properties + 24 original ones = 524 total sample properties
-if [ "$SAMPLE_PROP_COUNT" -lt "520" ]; then
-    echo "✅ Populating sample data (safe - only adds, never deletes)..."
-    echo "⚠️ NOTE: This will only ADD sample data, never delete existing properties."
-    echo ""
-    
-    # Run populate_sample_data with explicit error handling and full output
-    echo "📝 Executing: python manage.py populate_sample_data"
-    python manage.py populate_sample_data 2>&1
-    EXIT_CODE=$?
-    
-    if [ $EXIT_CODE -eq 0 ]; then
-        echo "✅ Sample data population completed successfully"
-    else
-        echo "❌ Sample data population failed with exit code: $EXIT_CODE"
-        echo "⚠️ Check the logs above for error details."
-    fi
-else
-    echo "✅ Sample data already populated ($SAMPLE_PROP_COUNT sample properties found)"
-    echo "⏭️  Skipping sample data population (already have sufficient sample data)"
-fi
+# DISABLED: Auto-population of sample data to prevent unwanted seeding
+# To manually populate sample data, run: python manage.py populate_sample_data
+# Auto-population is disabled to prevent adding properties on every deployment
+echo "⏭️  Auto-population of sample data is DISABLED"
+echo "   To manually populate sample data, run: python manage.py populate_sample_data"
+echo "   Current sample properties: $SAMPLE_PROP_COUNT"
+
+# OLD CODE (DISABLED):
+# if [ "$SAMPLE_PROP_COUNT" -lt "520" ]; then
+#     echo "✅ Populating sample data (safe - only adds, never deletes)..."
+#     python manage.py populate_sample_data 2>&1
+# else
+#     echo "✅ Sample data already populated ($SAMPLE_PROP_COUNT sample properties found)"
+#     echo "⏭️  Skipping sample data population (already have sufficient sample data)"
+# fi
 
 echo "============================================================"
 echo ""

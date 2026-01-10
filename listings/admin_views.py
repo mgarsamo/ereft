@@ -434,11 +434,16 @@ def admin_bulk_delete_properties(request):
                             
                         except Exception as orm_error:
                             error_str = str(orm_error)
-                            print(f"[BULK DELETE]   ⚠️ Django ORM deletion failed: {error_str}")
+                            error_type = type(orm_error).__name__
+                            print(f"[BULK DELETE]   ⚠️ Django ORM deletion failed: {error_type}: {error_str}")
+                            
+                            # Check if it's a constraint error
+                            if 'constraint' in error_str.lower() or 'foreign key' in error_str.lower():
+                                print(f"[BULK DELETE]   ⚠️  Database constraint issue - trying raw SQL fallback...")
                             
                             # Fallback to raw SQL if ORM fails (same as destroy method)
-                            print(f"[BULK DELETE]   Attempting raw SQL deletion fallback...")
                             try:
+                                print(f"[BULK DELETE]   Attempting raw SQL deletion fallback...")
                                 with connection.cursor() as cursor:
                                     # Delete related objects via raw SQL first
                                     cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [prop_uuid])
@@ -461,22 +466,31 @@ def admin_bulk_delete_properties(request):
                                     deleted_count += 1
                                     deleted_ids.append(prop_id)
                             except Exception as sql_error:
-                                print(f"[BULK DELETE]   ✗ Raw SQL deletion also failed: {str(sql_error)}")
+                                error_type_sql = type(sql_error).__name__
+                                error_str_sql = str(sql_error)
+                                print(f"[BULK DELETE]   ✗ Raw SQL deletion also failed: {error_type_sql}: {error_str_sql}")
                                 import traceback
                                 traceback.print_exc()
-                                raise sql_error
+                                # Don't raise - continue to next property so transaction doesn't rollback
+                                not_found_ids.append(prop_id_str)
+                                continue  # CRITICAL: Skip to next property
                         
                     except Property.DoesNotExist:
-                        print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found")
+                        print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found (DoesNotExist)")
                         not_found_ids.append(prop_id_str)
-                    except Exception as e:
-                        # Log detailed error but don't break the loop
+                        continue  # Skip to next property
+                    except Exception as outer_e:
+                        # Catch any other unexpected errors in the outer try block
                         import traceback
                         error_trace = traceback.format_exc()
-                        print(f"[BULK DELETE]   ✗ Error deleting property {prop_id_str}: {str(e)}")
+                        error_type = type(outer_e).__name__
+                        error_message = str(outer_e)
+                        
+                        print(f"[BULK DELETE]   ✗ Unexpected error for property {prop_id_str}: {error_type}: {error_message}")
                         print(f"[BULK DELETE]   Traceback: {error_trace}")
+                        
                         not_found_ids.append(prop_id_str)
-                        # Continue with next property instead of breaking the transaction
+                        # Continue to next property - don't break the transaction
                 
                 # Transaction will commit here if no unhandled exceptions
                 print(f"[BULK DELETE] Transaction committed: {deleted_count} properties deleted")

@@ -50,18 +50,16 @@ class PropertyImageSerializer(serializers.ModelSerializer):
     
     def get_image_url(self, obj):
         """BULLETPROOF: Always return full Cloudinary URL - construct from public_id or use stored URL"""
-        print(f"🔍 PropertyImageSerializer.get_image_url: Called for PropertyImage ID={obj.id if obj else 'None'}")
+        # Removed verbose debug logging - uncomment for debugging if needed
+        # print(f"🔍 PropertyImageSerializer.get_image_url: Called for PropertyImage ID={obj.id if obj else 'None'}")
         
         if not obj or not obj.image:
-            print(f"   ⚠️ No obj or no obj.image, returning None")
+            # print(f"   ⚠️ No obj or no obj.image, returning None")
             return None
         
         image_value = str(obj.image).strip()
         if not image_value or image_value in ['None', 'null', '']:
-            print(f"   ⚠️ Empty image_value, returning None")
             return None
-        
-        print(f"   image_value (from DB): '{image_value[:80]}...' (length: {len(image_value)})")
         
         # CRITICAL FIX: Extract public_id from list representation if stored incorrectly
         # Handle cases where the value is stored as ['public_id'] or "[ 'public_id' ]" etc.
@@ -71,28 +69,22 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         
         # Try to extract public_id from list representation
         if image_value.startswith('[') and image_value.endswith(']'):
-            print(f"   ⚠️ WARNING: image_value appears to be a list representation: '{image_value}'")
             try:
                 # Try to parse as Python list literal
                 parsed_list = ast.literal_eval(image_value)
                 if isinstance(parsed_list, list) and len(parsed_list) > 0:
                     image_value = str(parsed_list[0]).strip().strip("'\"")
-                    print(f"   ✅ Extracted public_id from list: '{image_value}'")
             except (ValueError, SyntaxError):
                 try:
                     # Try to parse as JSON
                     parsed_list = json.loads(image_value)
                     if isinstance(parsed_list, list) and len(parsed_list) > 0:
                         image_value = str(parsed_list[0]).strip().strip("'\"")
-                        print(f"   ✅ Extracted public_id from JSON list: '{image_value}'")
                 except (ValueError, json.JSONDecodeError):
                     # Try regex extraction
                     match = re.search(r"['\"]([^'\"]+)['\"]", image_value)
                     if match:
                         image_value = match.group(1)
-                        print(f"   ✅ Extracted public_id using regex: '{image_value}'")
-                    else:
-                        print(f"   ❌ Could not extract public_id from list representation")
         
         # Remove any remaining quotes
         image_value = image_value.strip().strip("'\"")
@@ -102,36 +94,26 @@ class PropertyImageSerializer(serializers.ModelSerializer):
             # Convert HTTP to HTTPS
             if image_value.startswith('http://'):
                 image_value = image_value.replace('http://', 'https://', 1)
-            print(f"   ✅ Already a full URL: {image_value[:80]}...")
             return image_value
         
         # If it's a public_id (like "ereft_properties/nggejftgnzxzwuitw3wp"), construct the URL
         # Public IDs don't start with http, they're just identifiers
         if image_value and not image_value.startswith('http'):
-            print(f"   Constructing URL from public_id: '{image_value}'")
-            
             # CRITICAL: Validate public_id format (should not contain brackets or quotes)
             if '[' in image_value or ']' in image_value or image_value.startswith("'") or image_value.startswith('"'):
-                print(f"   ❌ WARNING: Invalid public_id format detected: '{image_value}'")
                 # Try to clean it up one more time
                 image_value = re.sub(r"^['\"]+|['\"]+$", "", image_value)
                 image_value = re.sub(r"\[|\]", "", image_value)
                 image_value = image_value.strip()
-                print(f"   Cleaned public_id: '{image_value}'")
             
             # Try using Cloudinary SDK first
             try:
                 from .utils import get_cloudinary_url
                 cloudinary_url = get_cloudinary_url(image_value)
                 if cloudinary_url:
-                    print(f"   ✅ Constructed URL via SDK: {cloudinary_url[:80]}...")
                     return cloudinary_url
-                else:
-                    print(f"   ⚠️ get_cloudinary_url returned None")
-            except Exception as e:
-                print(f"   ⚠️ Failed to construct URL via SDK from public_id '{image_value}': {e}")
-                import traceback
-                traceback.print_exc()
+            except Exception:
+                pass
             
             # Fallback: Construct URL manually
             try:
@@ -141,19 +123,16 @@ class PropertyImageSerializer(serializers.ModelSerializer):
                 # https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}
                 # Cloudinary will serve the image with the correct format automatically
                 url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{image_value}"
-                print(f"   ✅ Constructed URL manually: {url[:80]}...")
                 return url
-            except Exception as e:
-                print(f"   ❌ Failed to construct URL manually: {e}")
-                import traceback
-                traceback.print_exc()
+            except Exception:
+                pass
         
-        print(f"   ❌ Could not construct URL, returning None")
         return None
     
     def to_representation(self, instance):
         """BULLETPROOF: Always construct full Cloudinary URL from public_id stored in image field"""
-        print(f"🔍 PropertyImageSerializer.to_representation: Called for PropertyImage ID={instance.id if instance else 'None'}")
+        # Removed verbose debug logging - uncomment for debugging if needed
+        # print(f"🔍 PropertyImageSerializer.to_representation: Called for PropertyImage ID={instance.id if instance else 'None'}")
         
         representation = super().to_representation(instance)
         
