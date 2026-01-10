@@ -84,4 +84,6 @@ urlpatterns = [
     path('admin/users/', admin_views.admin_all_users, name='admin-all-users'),
     path('admin/properties/', admin_views.admin_all_properties, name='admin-all-properties'),
     path('admin/users/<int:user_id>/listings/', admin_views.admin_user_listings, name='admin-user-listings'),
+    path('admin/delete-townhouses/', admin_views.admin_delete_townhouses, name='admin-delete-townhouses'),
+    path('admin/bulk-delete-properties/', admin_views.admin_bulk_delete_properties, name='admin-bulk-delete-properties'),
 ]

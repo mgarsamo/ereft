@@ -9,7 +9,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Property, UserProfile
+from .models import Property, UserProfile, PropertyImage, Favorite
+from django.core.cache import cache
+from django.db import transaction
 from datetime import timedelta
 
 def is_admin_user(user):
@@ -266,3 +268,138 @@ def admin_user_listings(request, user_id):
         'listings': properties_data
     })
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_delete_townhouses(request):
+    """
+    Permanently delete all townhouse properties from the system
+    Admin only endpoint
+    """
+    if not is_admin_user(request.user):
+        return Response(
+            {'detail': 'Admin access required.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Find all townhouse properties
+    townhouse_properties = Property.objects.filter(property_type='townhouse')
+    count = townhouse_properties.count()
+    
+    if count == 0:
+        return Response({
+            'success': True,
+            'message': 'No townhouse properties found. Nothing to delete.',
+            'deleted_count': 0
+        })
+    
+    deleted_count = 0
+    deleted_ids = []
+    
+    try:
+        with transaction.atomic():
+            for prop in townhouse_properties:
+                prop_id = prop.id
+                prop_title = prop.title
+                
+                # Delete related PropertyImage objects
+                PropertyImage.objects.filter(property=prop).delete()
+                
+                # Delete related Favorite objects
+                Favorite.objects.filter(property=prop).delete()
+                
+                # Delete the property itself
+                prop.delete()
+                
+                deleted_count += 1
+                deleted_ids.append(str(prop_id))
+            
+            # Clear cache to ensure deleted properties don't appear
+            cache.clear()
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully deleted {deleted_count} townhouse propert{"y" if deleted_count == 1 else "ies"}.',
+                'deleted_count': deleted_count,
+                'deleted_ids': deleted_ids[:50],  # Return first 50 IDs
+                'total_found': count
+            }, status=status.HTTP_200_OK)
+            
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Error during deletion: {str(e)}',
+            'deleted_count': deleted_count
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_bulk_delete_properties(request):
+    """
+    Permanently delete multiple properties by their IDs
+    Admin only endpoint
+    """
+    if not is_admin_user(request.user):
+        return Response(
+            {'detail': 'Admin access required.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    property_ids = request.data.get('property_ids', [])
+    
+    if not property_ids or not isinstance(property_ids, list) or len(property_ids) == 0:
+        return Response(
+            {'success': False, 'message': 'property_ids array is required and must not be empty'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    deleted_count = 0
+    deleted_ids = []
+    not_found_ids = []
+    
+    try:
+        with transaction.atomic():
+            for prop_id_str in property_ids:
+                try:
+                    # Django ORM handles both string and UUID, but ensure it's a valid format
+                    prop = Property.objects.get(id=prop_id_str)
+                    
+                    # Delete related PropertyImage objects
+                    PropertyImage.objects.filter(property=prop).delete()
+                    
+                    # Delete related Favorite objects
+                    Favorite.objects.filter(property=prop).delete()
+                    
+                    # Delete the property itself
+                    prop.delete()
+                    
+                    deleted_count += 1
+                    deleted_ids.append(str(prop.id))
+                except Property.DoesNotExist:
+                    not_found_ids.append(str(prop_id_str))
+                except Exception as e:
+                    # Log error but continue with other properties
+                    print(f"Error deleting property {prop_id_str}: {str(e)}")
+                    not_found_ids.append(str(prop_id_str))
+            
+            # Clear cache to ensure deleted properties don't appear
+            cache.clear()
+            
+            message = f'Successfully deleted {deleted_count} propert{"y" if deleted_count == 1 else "ies"}.'
+            if not_found_ids:
+                message += f' {len(not_found_ids)} propert{"y" if len(not_found_ids) == 1 else "ies"} not found or could not be deleted.'
+            
+            return Response({
+                'success': True,
+                'message': message,
+                'deleted_count': deleted_count,
+                'deleted_ids': deleted_ids[:100],  # Return first 100 IDs
+                'not_found_ids': not_found_ids[:100] if not_found_ids else [],
+                'total_requested': len(property_ids)
+            }, status=status.HTTP_200_OK)
+            
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Error during bulk deletion: {str(e)}',
+            'deleted_count': deleted_count
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
