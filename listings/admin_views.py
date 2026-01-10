@@ -383,8 +383,13 @@ def admin_bulk_delete_properties(request):
         from django.db import connection
         
         try:
+            # Use a top-level transaction, but use savepoints for each property
+            # This way if one property fails, it doesn't abort the entire transaction
             with transaction.atomic():
                 for prop_id_str in property_ids_clean:
+                    # Use a savepoint for each property deletion
+                    # If this property fails, we rollback only this savepoint, not the whole transaction
+                    savepoint_id = transaction.savepoint()
                     try:
                         # Get property - Django ORM handles both string and UUID
                         prop = Property.objects.get(id=prop_id_str)
@@ -431,6 +436,8 @@ def admin_bulk_delete_properties(request):
                             
                             deleted_count += 1
                             deleted_ids.append(prop_id)
+                            # Release savepoint on success
+                            transaction.savepoint_commit(savepoint_id)
                             
                         except Exception as orm_error:
                             error_str = str(orm_error)
@@ -465,18 +472,23 @@ def admin_bulk_delete_properties(request):
                                     print(f"[BULK DELETE]   ✓ Property deleted via raw SQL: {prop_id}")
                                     deleted_count += 1
                                     deleted_ids.append(prop_id)
+                                    # Release savepoint on success
+                                    transaction.savepoint_commit(savepoint_id)
                             except Exception as sql_error:
                                 error_type_sql = type(sql_error).__name__
                                 error_str_sql = str(sql_error)
                                 print(f"[BULK DELETE]   ✗ Raw SQL deletion also failed: {error_type_sql}: {error_str_sql}")
                                 import traceback
                                 traceback.print_exc()
-                                # Don't raise - continue to next property so transaction doesn't rollback
+                                # Rollback this savepoint and continue to next property
+                                transaction.savepoint_rollback(savepoint_id)
                                 not_found_ids.append(prop_id_str)
                                 continue  # CRITICAL: Skip to next property
                         
                     except Property.DoesNotExist:
                         print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found (DoesNotExist)")
+                        # Rollback savepoint for this property
+                        transaction.savepoint_rollback(savepoint_id)
                         not_found_ids.append(prop_id_str)
                         continue  # Skip to next property
                     except Exception as outer_e:
@@ -489,8 +501,14 @@ def admin_bulk_delete_properties(request):
                         print(f"[BULK DELETE]   ✗ Unexpected error for property {prop_id_str}: {error_type}: {error_message}")
                         print(f"[BULK DELETE]   Traceback: {error_trace}")
                         
+                        # Rollback savepoint for this property
+                        try:
+                            transaction.savepoint_rollback(savepoint_id)
+                        except Exception:
+                            pass  # Savepoint may already be rolled back
+                        
                         not_found_ids.append(prop_id_str)
-                        # Continue to next property - don't break the transaction
+                        continue  # Continue to next property - don't break the transaction
                 
                 # Transaction will commit here if no unhandled exceptions
                 print(f"[BULK DELETE] Transaction committed: {deleted_count} properties deleted")
