@@ -404,41 +404,16 @@ def admin_bulk_delete_properties(request):
                             except Exception:
                                 pass  # Skip if payments model not accessible
                         
-                        # Delete all related objects explicitly (same pattern as destroy method)
+                        # Delete the property itself - let CASCADE handle related objects
+                        # This is simpler and more reliable than manual deletion
                         try:
-                            prop.images.all().delete()
-                        except Exception as e:
-                            print(f"[BULK DELETE]   Warning: Error deleting images: {str(e)}")
-                        
-                        try:
-                            Favorite.objects.filter(property=prop).delete()
-                        except Exception as e:
-                            print(f"[BULK DELETE]   Warning: Error deleting favorites: {str(e)}")
-                        
-                        try:
-                            PropertyView.objects.filter(property=prop).delete()
-                        except Exception as e:
-                            print(f"[BULK DELETE]   Warning: Error deleting views: {str(e)}")
-                        
-                        try:
-                            Contact.objects.filter(property=prop).delete()
-                        except Exception as e:
-                            print(f"[BULK DELETE]   Warning: Error deleting contacts: {str(e)}")
-                        
-                        try:
-                            PropertyReview.objects.filter(property=prop).delete()
-                        except Exception as e:
-                            print(f"[BULK DELETE]   Warning: Error deleting reviews: {str(e)}")
-                        
-                        # Delete the property itself using the same pattern as destroy
-                        try:
-                            # Try Django ORM deletion first
+                            # Try Django ORM deletion (CASCADE will handle related objects)
                             prop.delete()
                             print(f"[BULK DELETE]   ✓ Property deleted via Django ORM: {prop_id}")
                             
-                            # Verify deletion immediately
+                            # Verify deletion immediately within transaction
                             if Property.objects.filter(id=prop_uuid).exists():
-                                raise Exception(f"Property {prop_id} still exists after delete()")
+                                raise Exception(f"Property {prop_id} still exists after delete() - transaction may be rolled back")
                             
                             deleted_count += 1
                             deleted_ids.append(prop_id)
@@ -448,35 +423,34 @@ def admin_bulk_delete_properties(request):
                             print(f"[BULK DELETE]   ⚠️ Django ORM deletion failed: {error_str}")
                             
                             # Fallback to raw SQL if ORM fails (same as destroy method)
-                            if 'payments_payment' in error_str or 'no such table' in error_str.lower() or not payments_table_exists:
-                                print(f"[BULK DELETE]   Using raw SQL deletion fallback...")
-                                try:
-                                    with connection.cursor() as cursor:
-                                        # Delete related objects via raw SQL
-                                        cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [prop_uuid])
-                                        cursor.execute("DELETE FROM listings_favorite WHERE property_id = %s", [prop_uuid])
-                                        cursor.execute("DELETE FROM listings_propertyview WHERE property_id = %s", [prop_uuid])
-                                        cursor.execute("DELETE FROM listings_contact WHERE property_id = %s", [prop_uuid])
-                                        cursor.execute("DELETE FROM listings_propertyreview WHERE property_id = %s", [prop_uuid])
-                                        
-                                        # Delete the property itself
-                                        cursor.execute("DELETE FROM listings_property WHERE id = %s", [prop_uuid])
-                                        
-                                        # Verify deletion
-                                        cursor.execute("SELECT COUNT(*) FROM listings_property WHERE id = %s", [prop_uuid])
-                                        remaining = cursor.fetchone()[0]
-                                        
-                                        if remaining > 0:
-                                            raise Exception(f"Property {prop_id} still exists after raw SQL deletion")
-                                        
-                                        print(f"[BULK DELETE]   ✓ Property deleted via raw SQL: {prop_id}")
-                                        deleted_count += 1
-                                        deleted_ids.append(prop_id)
-                                except Exception as sql_error:
-                                    print(f"[BULK DELETE]   ✗ Raw SQL deletion also failed: {str(sql_error)}")
-                                    raise sql_error
-                            else:
-                                raise orm_error
+                            print(f"[BULK DELETE]   Attempting raw SQL deletion fallback...")
+                            try:
+                                with connection.cursor() as cursor:
+                                    # Delete related objects via raw SQL first
+                                    cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [prop_uuid])
+                                    cursor.execute("DELETE FROM listings_favorite WHERE property_id = %s", [prop_uuid])
+                                    cursor.execute("DELETE FROM listings_propertyview WHERE property_id = %s", [prop_uuid])
+                                    cursor.execute("DELETE FROM listings_contact WHERE property_id = %s", [prop_uuid])
+                                    cursor.execute("DELETE FROM listings_propertyreview WHERE property_id = %s", [prop_uuid])
+                                    
+                                    # Delete the property itself
+                                    cursor.execute("DELETE FROM listings_property WHERE id = %s", [prop_uuid])
+                                    
+                                    # Verify deletion
+                                    cursor.execute("SELECT COUNT(*) FROM listings_property WHERE id = %s", [prop_uuid])
+                                    remaining = cursor.fetchone()[0]
+                                    
+                                    if remaining > 0:
+                                        raise Exception(f"Property {prop_id} still exists after raw SQL deletion")
+                                    
+                                    print(f"[BULK DELETE]   ✓ Property deleted via raw SQL: {prop_id}")
+                                    deleted_count += 1
+                                    deleted_ids.append(prop_id)
+                            except Exception as sql_error:
+                                print(f"[BULK DELETE]   ✗ Raw SQL deletion also failed: {str(sql_error)}")
+                                import traceback
+                                traceback.print_exc()
+                                raise sql_error
                         
                     except Property.DoesNotExist:
                         print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found")
