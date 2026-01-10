@@ -365,6 +365,9 @@ def admin_bulk_delete_properties(request):
         property_ids_clean = [str(pid) for pid in property_ids]
         
         # Perform deletions in a transaction
+        # Use the same pattern as PropertyViewSet.destroy for consistency
+        from django.db import connection
+        
         try:
             with transaction.atomic():
                 for prop_id_str in property_ids_clean:
@@ -373,36 +376,107 @@ def admin_bulk_delete_properties(request):
                         prop = Property.objects.get(id=prop_id_str)
                         prop_id = str(prop.id)
                         prop_title = prop.title
+                        prop_uuid = prop.id  # Keep UUID for potential raw SQL fallback
                         
                         print(f"[BULK DELETE] Processing property: {prop_id} - {prop_title}")
                         
-                        # Delete all related objects explicitly (CASCADE should handle this, but being explicit for safety)
-                        # Delete PropertyImage objects
-                        images_deleted = PropertyImage.objects.filter(property=prop).delete()[0]
-                        print(f"[BULK DELETE]   Deleted {images_deleted} PropertyImage objects")
+                        # Handle payments table if it exists (same as destroy method)
+                        payments_table_exists = False
+                        try:
+                            with connection.cursor() as cursor:
+                                if 'sqlite' in connection.vendor:
+                                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='payments_payment'")
+                                else:  # PostgreSQL
+                                    cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='payments_payment'")
+                                payments_table_exists = cursor.fetchone() is not None
+                        except Exception:
+                            payments_table_exists = False
                         
-                        # Delete Favorite objects
-                        favorites_deleted = Favorite.objects.filter(property=prop).delete()[0]
-                        print(f"[BULK DELETE]   Deleted {favorites_deleted} Favorite objects")
+                        # Update payments if table exists
+                        if payments_table_exists:
+                            try:
+                                from django.apps import apps
+                                payment_model = apps.get_model('payments', 'Payment')
+                                payments = payment_model.objects.filter(property=prop)
+                                if payments.exists():
+                                    payments.update(property=None)
+                                    print(f"[BULK DELETE]   Updated {payments.count()} payment records")
+                            except Exception:
+                                pass  # Skip if payments model not accessible
                         
-                        # Delete PropertyView objects
-                        views_deleted = PropertyView.objects.filter(property=prop).delete()[0]
-                        print(f"[BULK DELETE]   Deleted {views_deleted} PropertyView objects")
+                        # Delete all related objects explicitly (same pattern as destroy method)
+                        try:
+                            prop.images.all().delete()
+                        except Exception as e:
+                            print(f"[BULK DELETE]   Warning: Error deleting images: {str(e)}")
                         
-                        # Delete Contact objects
-                        contacts_deleted = Contact.objects.filter(property=prop).delete()[0]
-                        print(f"[BULK DELETE]   Deleted {contacts_deleted} Contact objects")
+                        try:
+                            Favorite.objects.filter(property=prop).delete()
+                        except Exception as e:
+                            print(f"[BULK DELETE]   Warning: Error deleting favorites: {str(e)}")
                         
-                        # Delete PropertyReview objects
-                        reviews_deleted = PropertyReview.objects.filter(property=prop).delete()[0]
-                        print(f"[BULK DELETE]   Deleted {reviews_deleted} PropertyReview objects")
+                        try:
+                            PropertyView.objects.filter(property=prop).delete()
+                        except Exception as e:
+                            print(f"[BULK DELETE]   Warning: Error deleting views: {str(e)}")
                         
-                        # Delete the property itself
-                        prop.delete()
-                        print(f"[BULK DELETE]   ✓ Successfully deleted property {prop_id}")
+                        try:
+                            Contact.objects.filter(property=prop).delete()
+                        except Exception as e:
+                            print(f"[BULK DELETE]   Warning: Error deleting contacts: {str(e)}")
                         
-                        deleted_count += 1
-                        deleted_ids.append(prop_id)
+                        try:
+                            PropertyReview.objects.filter(property=prop).delete()
+                        except Exception as e:
+                            print(f"[BULK DELETE]   Warning: Error deleting reviews: {str(e)}")
+                        
+                        # Delete the property itself using the same pattern as destroy
+                        try:
+                            # Try Django ORM deletion first
+                            prop.delete()
+                            print(f"[BULK DELETE]   ✓ Property deleted via Django ORM: {prop_id}")
+                            
+                            # Verify deletion immediately
+                            if Property.objects.filter(id=prop_uuid).exists():
+                                raise Exception(f"Property {prop_id} still exists after delete()")
+                            
+                            deleted_count += 1
+                            deleted_ids.append(prop_id)
+                            
+                        except Exception as orm_error:
+                            error_str = str(orm_error)
+                            print(f"[BULK DELETE]   ⚠️ Django ORM deletion failed: {error_str}")
+                            
+                            # Fallback to raw SQL if ORM fails (same as destroy method)
+                            if 'payments_payment' in error_str or 'no such table' in error_str.lower() or not payments_table_exists:
+                                print(f"[BULK DELETE]   Using raw SQL deletion fallback...")
+                                try:
+                                    with connection.cursor() as cursor:
+                                        # Delete related objects via raw SQL
+                                        cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [prop_uuid])
+                                        cursor.execute("DELETE FROM listings_favorite WHERE property_id = %s", [prop_uuid])
+                                        cursor.execute("DELETE FROM listings_propertyview WHERE property_id = %s", [prop_uuid])
+                                        cursor.execute("DELETE FROM listings_contact WHERE property_id = %s", [prop_uuid])
+                                        cursor.execute("DELETE FROM listings_propertyreview WHERE property_id = %s", [prop_uuid])
+                                        
+                                        # Delete the property itself
+                                        cursor.execute("DELETE FROM listings_property WHERE id = %s", [prop_uuid])
+                                        
+                                        # Verify deletion
+                                        cursor.execute("SELECT COUNT(*) FROM listings_property WHERE id = %s", [prop_uuid])
+                                        remaining = cursor.fetchone()[0]
+                                        
+                                        if remaining > 0:
+                                            raise Exception(f"Property {prop_id} still exists after raw SQL deletion")
+                                        
+                                        print(f"[BULK DELETE]   ✓ Property deleted via raw SQL: {prop_id}")
+                                        deleted_count += 1
+                                        deleted_ids.append(prop_id)
+                                except Exception as sql_error:
+                                    print(f"[BULK DELETE]   ✗ Raw SQL deletion also failed: {str(sql_error)}")
+                                    raise sql_error
+                            else:
+                                raise orm_error
                         
                     except Property.DoesNotExist:
                         print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found")
@@ -440,26 +514,62 @@ def admin_bulk_delete_properties(request):
         # Final verification AFTER transaction commit: check how many properties were actually deleted
         remaining_count = 0
         try:
-            remaining_count = Property.objects.filter(id__in=property_ids_clean).count()
+            # Wait a moment for transaction to fully commit
+            import time
+            time.sleep(0.5)
+            
+            # Use a fresh query to verify deletion
+            remaining_properties = Property.objects.filter(id__in=property_ids_clean)
+            remaining_count = remaining_properties.count()
             
             if remaining_count > 0:
+                remaining_ids = list(remaining_properties.values_list('id', flat=True))
                 print(f"[BULK DELETE] ⚠️  WARNING: {remaining_count} properties still exist after deletion attempt!")
-                remaining_ids = list(Property.objects.filter(id__in=property_ids_clean).values_list('id', flat=True))
                 print(f"[BULK DELETE] Remaining property IDs (first 10): {remaining_ids[:10]}")
-                # This is a critical issue - properties should be deleted
-                # Return error if any properties remain
-                return Response({
-                    'success': False,
-                    'message': f'Deletion completed but {remaining_count} properties still exist. This may indicate a database constraint issue.',
-                    'deleted_count': deleted_count,
-                    'remaining_count': remaining_count,
-                    'deleted_ids': deleted_ids[:50],
-                    'remaining_ids': remaining_ids[:50]
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                print(f"[BULK DELETE] Expected to delete: {len(property_ids_clean)}, Actually deleted: {deleted_count}, Still remaining: {remaining_count}")
+                
+                # Try one more time with raw SQL for remaining properties
+                print(f"[BULK DELETE] Attempting raw SQL deletion for remaining properties...")
+                try:
+                    with connection.cursor() as cursor:
+                        for remaining_id in remaining_ids[:10]:  # Try first 10 to avoid timeout
+                            try:
+                                # Delete all related objects
+                                cursor.execute("DELETE FROM listings_propertyimage WHERE property_id = %s", [remaining_id])
+                                cursor.execute("DELETE FROM listings_favorite WHERE property_id = %s", [remaining_id])
+                                cursor.execute("DELETE FROM listings_propertyview WHERE property_id = %s", [remaining_id])
+                                cursor.execute("DELETE FROM listings_contact WHERE property_id = %s", [remaining_id])
+                                cursor.execute("DELETE FROM listings_propertyreview WHERE property_id = %s", [remaining_id])
+                                cursor.execute("DELETE FROM listings_property WHERE id = %s", [remaining_id])
+                                print(f"[BULK DELETE]   Raw SQL deleted: {remaining_id}")
+                            except Exception as raw_error:
+                                print(f"[BULK DELETE]   Raw SQL failed for {remaining_id}: {str(raw_error)}")
+                    
+                    # Re-check after raw SQL attempt
+                    time.sleep(0.5)
+                    final_remaining = Property.objects.filter(id__in=property_ids_clean).count()
+                    if final_remaining < remaining_count:
+                        print(f"[BULK DELETE] Raw SQL helped: {remaining_count - final_remaining} more properties deleted")
+                        remaining_count = final_remaining
+                except Exception as raw_sql_error:
+                    print(f"[BULK DELETE] Raw SQL fallback failed: {str(raw_sql_error)}")
+                
+                # Return error if any properties remain after all attempts
+                if remaining_count > 0:
+                    return Response({
+                        'success': False,
+                        'message': f'Deletion attempted but {remaining_count} properties still exist. This may indicate a database constraint issue. Check backend logs for details.',
+                        'deleted_count': deleted_count,
+                        'remaining_count': remaining_count,
+                        'deleted_ids': deleted_ids[:50],
+                        'remaining_ids': remaining_ids[:50]
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             print(f"[BULK DELETE] ✅ Summary: {deleted_count} deleted, {len(not_found_ids)} not found/failed, 0 remaining")
         except Exception as verify_error:
+            import traceback
             print(f"[BULK DELETE] Warning: Verification query failed: {str(verify_error)}")
+            print(f"[BULK DELETE] Verification traceback: {traceback.format_exc()}")
             # Don't fail the whole operation if verification fails - deletion might have succeeded
         
         # Return success response
