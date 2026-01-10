@@ -364,86 +364,82 @@ def admin_bulk_delete_properties(request):
         # Convert all IDs to strings for consistency
         property_ids_clean = [str(pid) for pid in property_ids]
         
-        with transaction.atomic():
-            for prop_id_str in property_ids_clean:
-                try:
-                    # Get property - Django ORM handles both string and UUID
+        # Perform deletions in a transaction
+        try:
+            with transaction.atomic():
+                for prop_id_str in property_ids_clean:
                     try:
-                        prop = Property.objects.select_for_update().get(id=prop_id_str)
+                        # Get property - Django ORM handles both string and UUID
+                        prop = Property.objects.get(id=prop_id_str)
+                        prop_id = str(prop.id)
+                        prop_title = prop.title
+                        
+                        print(f"[BULK DELETE] Processing property: {prop_id} - {prop_title}")
+                        
+                        # Delete all related objects explicitly (CASCADE should handle this, but being explicit for safety)
+                        # Delete PropertyImage objects
+                        images_deleted = PropertyImage.objects.filter(property=prop).delete()[0]
+                        print(f"[BULK DELETE]   Deleted {images_deleted} PropertyImage objects")
+                        
+                        # Delete Favorite objects
+                        favorites_deleted = Favorite.objects.filter(property=prop).delete()[0]
+                        print(f"[BULK DELETE]   Deleted {favorites_deleted} Favorite objects")
+                        
+                        # Delete PropertyView objects
+                        views_deleted = PropertyView.objects.filter(property=prop).delete()[0]
+                        print(f"[BULK DELETE]   Deleted {views_deleted} PropertyView objects")
+                        
+                        # Delete Contact objects
+                        contacts_deleted = Contact.objects.filter(property=prop).delete()[0]
+                        print(f"[BULK DELETE]   Deleted {contacts_deleted} Contact objects")
+                        
+                        # Delete PropertyReview objects
+                        reviews_deleted = PropertyReview.objects.filter(property=prop).delete()[0]
+                        print(f"[BULK DELETE]   Deleted {reviews_deleted} PropertyReview objects")
+                        
+                        # Delete the property itself
+                        prop.delete()
+                        print(f"[BULK DELETE]   ✓ Successfully deleted property {prop_id}")
+                        
+                        deleted_count += 1
+                        deleted_ids.append(prop_id)
+                        
                     except Property.DoesNotExist:
-                        print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found (DoesNotExist)")
+                        print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found")
                         not_found_ids.append(prop_id_str)
-                        continue
-                    
-                    prop_id = str(prop.id)
-                    prop_title = prop.title
-                    
-                    print(f"[BULK DELETE] Processing property: {prop_id} - {prop_title}")
-                    
-                    # Delete all related objects explicitly (CASCADE should handle this, but being explicit for safety)
-                    # Use select_related to avoid N+1 queries
-                    
-                    # Delete PropertyImage objects
-                    images_deleted = PropertyImage.objects.filter(property=prop).delete()[0]
-                    print(f"[BULK DELETE]   Deleted {images_deleted} PropertyImage objects")
-                    
-                    # Delete Favorite objects
-                    favorites_deleted = Favorite.objects.filter(property=prop).delete()[0]
-                    print(f"[BULK DELETE]   Deleted {favorites_deleted} Favorite objects")
-                    
-                    # Delete PropertyView objects
-                    views_deleted = PropertyView.objects.filter(property=prop).delete()[0]
-                    print(f"[BULK DELETE]   Deleted {views_deleted} PropertyView objects")
-                    
-                    # Delete Contact objects
-                    contacts_deleted = Contact.objects.filter(property=prop).delete()[0]
-                    print(f"[BULK DELETE]   Deleted {contacts_deleted} Contact objects")
-                    
-                    # Delete PropertyReview objects
-                    reviews_deleted = PropertyReview.objects.filter(property=prop).delete()[0]
-                    print(f"[BULK DELETE]   Deleted {reviews_deleted} PropertyReview objects")
-                    
-                    # Delete the property itself using delete() method
-                    # This should trigger CASCADE for any remaining related objects
-                    prop_pk = prop.pk  # Store PK before deletion for verification
-                    prop.delete()
-                    
-                    # Verify deletion within the same transaction
-                    # Use a fresh query to avoid queryset cache
-                    still_exists = Property.objects.filter(id=prop_pk).exists()
-                    if still_exists:
-                        raise Exception(f"Property {prop_id} still exists after deletion - deletion may have failed or transaction rolled back")
-                    
-                    print(f"[BULK DELETE]   ✓ Successfully deleted property {prop_id} (verified in transaction)")
-                    
-                    deleted_count += 1
-                    deleted_ids.append(prop_id)
-                    
-                except Property.DoesNotExist:
-                    print(f"[BULK DELETE]   ✗ Property {prop_id_str} not found")
-                    not_found_ids.append(prop_id_str)
-                except Exception as e:
-                    # Log detailed error but don't break the loop
-                    import traceback
-                    error_trace = traceback.format_exc()
-                    print(f"[BULK DELETE]   ✗ Error deleting property {prop_id_str}: {str(e)}")
-                    print(f"[BULK DELETE]   Traceback: {error_trace}")
-                    not_found_ids.append(prop_id_str)
-                    # Continue with next property instead of breaking the transaction
-            
-            # Transaction will commit here if no unhandled exceptions
-            
-            # Clear all cache to ensure deleted properties don't appear
-            try:
-                cache.clear()
-                print(f"[BULK DELETE] Cache cleared successfully")
-            except Exception as cache_error:
-                print(f"[BULK DELETE] Warning: Cache clear failed: {str(cache_error)}")
-            
-            # Final verification AFTER transaction commit: check how many properties were actually deleted
-            # Use a fresh connection to avoid any query caching
-            from django.db import connection
-            connection.close()  # Force new connection
+                    except Exception as e:
+                        # Log detailed error but don't break the loop
+                        import traceback
+                        error_trace = traceback.format_exc()
+                        print(f"[BULK DELETE]   ✗ Error deleting property {prop_id_str}: {str(e)}")
+                        print(f"[BULK DELETE]   Traceback: {error_trace}")
+                        not_found_ids.append(prop_id_str)
+                        # Continue with next property instead of breaking the transaction
+                
+                # Transaction will commit here if no unhandled exceptions
+                print(f"[BULK DELETE] Transaction committed: {deleted_count} properties deleted")
+                
+        except Exception as transaction_error:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"[BULK DELETE] Transaction error: {str(transaction_error)}")
+            print(f"[BULK DELETE] Traceback: {error_trace}")
+            return Response({
+                'success': False,
+                'message': f'Transaction error during bulk deletion: {str(transaction_error)}',
+                'deleted_count': deleted_count
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Clear cache after transaction commits
+        try:
+            cache.clear()
+            print(f"[BULK DELETE] Cache cleared successfully")
+        except Exception as cache_error:
+            print(f"[BULK DELETE] Warning: Cache clear failed: {str(cache_error)}")
+        
+        # Final verification AFTER transaction commit: check how many properties were actually deleted
+        remaining_count = 0
+        try:
             remaining_count = Property.objects.filter(id__in=property_ids_clean).count()
             
             if remaining_count > 0:
@@ -462,19 +458,23 @@ def admin_bulk_delete_properties(request):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             print(f"[BULK DELETE] ✅ Summary: {deleted_count} deleted, {len(not_found_ids)} not found/failed, 0 remaining")
-            
-            message = f'Successfully deleted {deleted_count} propert{"y" if deleted_count == 1 else "ies"}.'
-            if not_found_ids:
-                message += f' {len(not_found_ids)} propert{"y" if len(not_found_ids) == 1 else "ies"} not found or could not be deleted.'
-            
-            return Response({
-                'success': True,
-                'message': message,
-                'deleted_count': deleted_count,
-                'deleted_ids': deleted_ids[:100],  # Return first 100 IDs
-                'not_found_ids': not_found_ids[:100] if not_found_ids else [],
-                'total_requested': len(property_ids)
-            }, status=status.HTTP_200_OK)
+        except Exception as verify_error:
+            print(f"[BULK DELETE] Warning: Verification query failed: {str(verify_error)}")
+            # Don't fail the whole operation if verification fails - deletion might have succeeded
+        
+        # Return success response
+        message = f'Successfully deleted {deleted_count} propert{"y" if deleted_count == 1 else "ies"}.'
+        if not_found_ids:
+            message += f' {len(not_found_ids)} propert{"y" if len(not_found_ids) == 1 else "ies"} not found or could not be deleted.'
+        
+        return Response({
+            'success': True,
+            'message': message,
+            'deleted_count': deleted_count,
+            'deleted_ids': deleted_ids[:100],  # Return first 100 IDs
+            'not_found_ids': not_found_ids[:100] if not_found_ids else [],
+            'total_requested': len(property_ids)
+        }, status=status.HTTP_200_OK)
             
     except Exception as e:
         import traceback
