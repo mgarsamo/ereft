@@ -138,16 +138,11 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         
         # CRITICAL: image field contains public_id (e.g., "ereft_properties/nggejftgnzxzwuitw3wp")
         # We need to construct the full Cloudinary URL from it
-        image_field = representation.get('image')
         image_url = representation.get('image_url')
-        
-        print(f"   image_field (from DB): '{image_field[:80] if image_field else 'None'}...'")
-        print(f"   image_url (from get_image_url): '{image_url[:80] if image_url else 'None'}...'")
         
         # If image_url is already set by get_image_url() and is a full HTTPS URL, use it
         if image_url and image_url.startswith('https://'):
             representation['image_url'] = image_url
-            print(f"   ✅ Using image_url from get_image_url: {image_url[:80]}...")
             return representation
         
         # Otherwise, construct from image field (public_id)
