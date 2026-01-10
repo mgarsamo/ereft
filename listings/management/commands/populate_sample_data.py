@@ -48,11 +48,18 @@ class Command(BaseCommand):
             "townhouse": (100, 300), "land": (200, 2000), "commercial": (50, 1000)
         }
         
+        # Base coordinates for vacation homes (matching frontend sub-cities exactly - note: Gullele has double 'l')
         base_coords = {
-            "Bole": (9.015, 38.760), "Kirkos": (9.010, 38.750), "Arada": (9.030, 38.740),
-            "Addis Ketema": (9.005, 38.720), "Lideta": (9.028, 38.738), "Nifas Silk-Lafto": (8.985, 38.725),
-            "Kolfe Keranio": (9.009, 38.739), "Gulele": (9.045, 38.720), "Yeka": (9.025, 38.785),
-            "Akaki Kality": (8.950, 38.740)
+            "Bole": (9.015, 38.760), 
+            "CMC": (9.012, 38.755), 
+            "Kirkos": (9.010, 38.750), 
+            "Arada": (9.030, 38.740),
+            "Lideta": (9.028, 38.738), 
+            "Addis Ketema": (9.005, 38.720), 
+            "Nifas Silk-Lafto": (8.985, 38.725),
+            "Kolfe Keranio": (9.009, 38.739), 
+            "Gullele": (9.045, 38.720),  # Double 'l' to match frontend
+            "Yeka": (9.025, 38.785)
         }
         
         # Extensive image sets from Pexels for better variety
@@ -328,6 +335,161 @@ class Command(BaseCommand):
             properties.append(prop_data)
         
         return properties
+
+    def _generate_vacation_homes(self):
+        """Generate vacation home properties across all Addis Ababa sub-cities"""
+        ethiopian_names = [
+            "Abebe", "Tigist", "Mulugeta", "Hirut", "Yonas", "Marta", "Solomon", "Alemitu",
+            "Getachew", "Meron", "Daniel", "Selam", "Tewodros", "Rahel", "Kebede", "Mihret",
+            "Bereket", "Eyerusalem", "Henok", "Bethelhem", "Yared", "Meskel", "Fitsum", "Hanna",
+            "Girma", "Tsehay", "Mekonnen", "Aster", "Assefa", "Yohannes", "Mulu",
+            "Tesfaye", "Kidan", "Amanuel", "Lydia", "Abel", "Samuel", "Ruth",
+            "Elias", "Martha", "Joseph", "Sarah", "Michael", "Mary", "David", "Esther"
+        ]
+        
+        phone_prefixes = ["+251911", "+251912", "+251913", "+251914", "+251915", "+251916", "+251917", "+251918", "+251919", "+251966", "+251967", "+251968", "+251969"]
+        
+        # All Addis Ababa sub-cities for vacation homes (matching frontend list exactly)
+        sub_cities = ["Bole", "CMC", "Kirkos", "Arada", "Lideta", "Addis Ketema", 
+                     "Nifas Silk-Lafto", "Kolfe Keranio", "Gullele", "Yeka"]
+        
+        # Vacation home property images (property-only, no human pictures)
+        # Using house/villa images that work well for vacation rentals
+        vacation_home_images = [
+            "1396122", "186077", "280229", "1029599", "2635038", "1571460", "1643383", "1648776",
+            "1438832", "1571468", "280222", "1396132", "259588", "1571471", "1643384", "280233",
+            "1024311", "280221", "106399", "280224", "1396138", "280223", "271743", "280225",
+            "1571463", "1648768", "1396131", "1571469", "1648778", "280232", "1571470", "271724",
+            "1396127", "1643385", "1571472", "280234", "271742", "1396135", "1648779", "271728",
+            "271795", "1457847", "1329711", "1918291", "271643", "1457846", "1329712", "271796",
+        ]
+        
+        # Base coordinates for vacation homes (matching frontend sub-cities exactly)
+        base_coords = {
+            "Bole": (9.015, 38.760), 
+            "CMC": (9.012, 38.755), 
+            "Kirkos": (9.010, 38.750), 
+            "Arada": (9.030, 38.740),
+            "Lideta": (9.028, 38.738), 
+            "Addis Ketema": (9.005, 38.720), 
+            "Nifas Silk-Lafto": (8.985, 38.725),
+            "Kolfe Keranio": (9.009, 38.739), 
+            "Gullele": (9.045, 38.720),  # Note: Double 'l' to match frontend spelling
+            "Yeka": (9.025, 38.785)
+        }
+        
+        # Vacation rental price ranges (per night in ETB)
+        # Higher end vacation rentals: 25,000-100,000 per night
+        # Mid-range: 15,000-50,000 per night
+        price_ranges = {
+            "luxury": (50000, 100000),
+            "mid_range": (25000, 50000),
+            "budget": (15000, 30000)
+        }
+        
+        vacation_homes = []
+        
+        # Generate 50 vacation homes (5 per sub-city for good distribution)
+        for sub_city in sub_cities:
+            # Create 5 vacation homes per sub-city = 50 total
+            for i in range(5):
+                # Mix of luxury, mid-range, and budget
+                price_tier = random.choice(["luxury", "mid_range", "budget", "mid_range"])  # More mid-range
+                price_min, price_max = price_ranges[price_tier]
+                price = Decimal(str(random.randint(price_min, price_max)))
+                
+                bedrooms = random.choice([2, 2, 3, 3, 4])  # Mostly 2-3 bedrooms, some 4
+                bathrooms = Decimal(str(random.choice([1.0, 1.5, 2.0, 2.5, 3.0])))
+                area_sqm = random.randint(100, 300)  # Vacation homes typically 100-300 sqm
+                
+                base_lat, base_lng = base_coords.get(sub_city, (9.010, 38.750))  # Default to Addis Ababa center if not found
+                lat = Decimal(str(base_lat + random.uniform(-0.01, 0.01)))
+                lng = Decimal(str(base_lng + random.uniform(-0.01, 0.01)))
+                
+                first_name = random.choice(ethiopian_names)
+                last_name = random.choice(ethiopian_names)
+                contact_name = f"{first_name} {last_name}"
+                prefix = random.choice(phone_prefixes)
+                contact_phone = f"{prefix}{''.join([str(random.randint(0, 9)) for _ in range(6)])}"
+                
+                # Select 2-4 property images (fewer images for now as requested)
+                num_images = random.choice([2, 3, 4])
+                selected = random.sample(vacation_home_images, min(num_images, len(vacation_home_images)))
+                images = [
+                    {'url': f'https://images.pexels.com/photos/{img_id}/pexels-photo-{img_id}.jpeg?auto=compress&cs=tinysrgb&w=1200', 
+                     'caption': f'Vacation home view {idx+1}'} 
+                    for idx, img_id in enumerate(selected)
+                ]
+                
+                # Vacation home features
+                has_pool = random.choice([True, False, False])  # 33% have pools
+                has_garden = random.choice([True, True, False])  # 67% have gardens
+                has_balcony = random.choice([True, True, False])  # 67% have balconies
+                is_furnished = True  # Vacation homes are always furnished
+                has_air_conditioning = random.choice([True, True, False])  # 67% have AC
+                
+                # Generate descriptive title based on features
+                title_parts = []
+                if price >= 70000:
+                    title_parts.append("Luxury")
+                elif price >= 40000:
+                    title_parts.append("Premium")
+                
+                if has_pool:
+                    title_parts.append("Pool")
+                if bedrooms >= 4:
+                    title_parts.append(f"{bedrooms}-Bedroom")
+                elif bedrooms == 3:
+                    title_parts.append("Spacious 3-Bedroom")
+                else:
+                    title_parts.append(f"Cozy {bedrooms}-Bedroom")
+                
+                title_parts.append("Vacation Home")
+                title = f"{' '.join(title_parts)} in {sub_city}"
+                
+                description = f"Beautiful vacation rental in {sub_city}. "
+                if has_pool:
+                    description += "Features a private pool, "
+                if has_garden:
+                    description += "landscaped garden, "
+                description += f"{bedrooms} bedrooms and {bathrooms} bathrooms. Fully furnished with modern amenities. "
+                if has_air_conditioning:
+                    description += "Air-conditioned for comfort. "
+                description += f"Perfect for families or groups looking for a relaxing getaway in Addis Ababa."
+                
+                prop_data = {
+                    'title': title,
+                    'description': description,
+                    'property_type': 'vacation_home',
+                    'listing_type': 'rent',  # Vacation homes are always for rent
+                    'price': price,
+                    'address': f"{sub_city}, Addis Ababa",
+                    'city': 'Addis Ababa',
+                    'sub_city': sub_city,
+                    'kebele': f"{random.randint(1, 15):02d}",
+                    'country': 'Ethiopia',
+                    'latitude': lat,
+                    'longitude': lng,
+                    'bedrooms': bedrooms,
+                    'bathrooms': bathrooms,
+                    'area_sqm': area_sqm,
+                    'year_built': random.randint(2015, 2024),
+                    'is_furnished': is_furnished,
+                    'has_pool': has_pool,
+                    'has_garden': has_garden,
+                    'has_balcony': has_balcony,
+                    'has_air_conditioning': has_air_conditioning,
+                    'has_garage': random.choice([True, False]),
+                    'status': 'active',
+                    'is_featured': random.choice([True, False, False, False]),  # 25% featured
+                    'contact_name': contact_name,
+                    'contact_phone': contact_phone,
+                    'images': images
+                }
+                
+                vacation_homes.append(prop_data)
+        
+        return vacation_homes
 
     def handle(self, *args, **options):
         self.stdout.write('🏠 Starting to populate sample property data...')
@@ -998,8 +1160,17 @@ class Command(BaseCommand):
         # Generate 500 additional diverse properties with contact info and extensive image sets
         self.stdout.write('🔄 Generating 500 additional diverse properties with extensive image coverage...')
         additional_properties = self._generate_260_properties()  # Function name is legacy, but generates 500 now
+        
+        # Generate vacation homes
+        self.stdout.write('🏖️ Generating vacation home properties...')
+        vacation_homes = self._generate_vacation_homes()
+        self.stdout.write(f'   Generated {len(vacation_homes)} vacation home properties across all Addis Ababa sub-cities')
+        
+        # Combine all properties
         sample_properties.extend(additional_properties)
+        sample_properties.extend(vacation_homes)
         self.stdout.write(f'✅ Generated {len(additional_properties)} additional properties with stratified distribution')
+        self.stdout.write(f'✅ Added {len(vacation_homes)} vacation home properties')
         
         properties_created = 0
         properties_updated = 0
@@ -1091,7 +1262,7 @@ class Command(BaseCommand):
         self.stdout.write(f'   - User-created properties: {user_properties_count}')
         self.stdout.write(f'⭐ Featured properties: {Property.objects.filter(is_featured=True).count()}')
         self.stdout.write(f'🏠 Active properties: {Property.objects.filter(is_active=True).count()}')
-        self.stdout.write(f'🏘️ Property types: Houses({Property.objects.filter(property_type="house").count()}), Apartments({Property.objects.filter(property_type="apartment").count()}), Condos({Property.objects.filter(property_type="condo").count()}), Townhouses({Property.objects.filter(property_type="townhouse").count()}), Land({Property.objects.filter(property_type="land").count()}), Commercial({Property.objects.filter(property_type="commercial").count()})')
+        self.stdout.write(f'🏘️ Property types: Houses({Property.objects.filter(property_type="house").count()}), Apartments({Property.objects.filter(property_type="apartment").count()}), Condos({Property.objects.filter(property_type="condo").count()}), Townhouses({Property.objects.filter(property_type="townhouse").count()}), Vacation Homes({Property.objects.filter(property_type="vacation_home").count()}), Land({Property.objects.filter(property_type="land").count()}), Commercial({Property.objects.filter(property_type="commercial").count()})')
         self.stdout.write('=' * 60)
         
         if sample_properties_count < 20:

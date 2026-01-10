@@ -50,6 +50,7 @@ class Property(models.Model):
         ('apartment', 'Apartment'),
         ('condo', 'Condo'),
         ('townhouse', 'Townhouse'),
+        ('vacation_home', 'Vacation Home'),
         ('land', 'Land'),
         ('commercial', 'Commercial'),
         ('other', 'Other'),
