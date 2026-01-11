@@ -205,14 +205,45 @@ def property_bookings(request, property_id):
         current_date = check_in
         unavailable_dates = []
         
+        # Check minimum/maximum stay requirements
+        if property_obj.min_stay_nights and nights < property_obj.min_stay_nights:
+            return Response(
+                {'detail': f'Minimum stay is {property_obj.min_stay_nights} nights. Selected stay is {nights} nights.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if property_obj.max_stay_nights and nights > property_obj.max_stay_nights:
+            return Response(
+                {'detail': f'Maximum stay is {property_obj.max_stay_nights} nights. Selected stay is {nights} nights.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check against property availability_start_date and availability_end_date
+        if property_obj.availability_start_date and check_in < property_obj.availability_start_date:
+            return Response(
+                {'detail': f'Property is not available until {property_obj.availability_start_date.strftime("%B %d, %Y")}.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if property_obj.availability_end_date and check_out > property_obj.availability_end_date:
+            return Response(
+                {'detail': f'Property is not available after {property_obj.availability_end_date.strftime("%B %d, %Y")}.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check day-by-day availability (Availability model records override defaults)
         while current_date < check_out:
             availability = Availability.objects.filter(
                 property=property_obj,
                 date=current_date
             ).first()
             
-            if not availability or availability.status != 'available':
-                unavailable_dates.append(str(current_date))
+            # If explicit Availability record exists, check its status
+            if availability:
+                if availability.status != 'available':
+                    unavailable_dates.append(str(current_date))
+            # If no Availability record exists, date is available (within the property's date range)
+            # The property's availability_start_date and availability_end_date were already checked above
             
             current_date += timedelta(days=1)
         
