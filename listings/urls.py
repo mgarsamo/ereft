@@ -9,6 +9,7 @@ from rest_framework.authtoken.views import obtain_auth_token
 from django.contrib.auth.views import LogoutView
 from . import views
 from . import admin_views
+from . import availability_views
 from .auth_views import (
     CustomTokenObtainPairView, 
     CustomTokenRefreshView,
@@ -86,4 +87,10 @@ urlpatterns = [
     path('admin/users/<int:user_id>/listings/', admin_views.admin_user_listings, name='admin-user-listings'),
     path('admin/delete-townhouses/', admin_views.admin_delete_townhouses, name='admin-delete-townhouses'),
     path('admin/bulk-delete-properties/', admin_views.admin_bulk_delete_properties, name='admin-bulk-delete-properties'),
+    
+    # Availability and Booking Management (Vacation Homes)
+    path('properties/<uuid:property_id>/availability/', availability_views.property_availability, name='property-availability'),
+    path('properties/<uuid:property_id>/availability/<str:date_str>/', availability_views.availability_detail, name='availability-detail'),
+    path('properties/<uuid:property_id>/bookings/', availability_views.property_bookings, name='property-bookings'),
+    path('bookings/<uuid:booking_id>/status/', availability_views.booking_status, name='booking-status'),
 ]

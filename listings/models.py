@@ -120,6 +120,21 @@ class Property(models.Model):
     contact_name = models.CharField(max_length=255, blank=True, null=True)
     contact_phone = models.CharField(max_length=50, blank=True, null=True)
     
+    # Vacation Home Specific Fields (only for vacation_home property type)
+    availability_start_date = models.DateField(blank=True, null=True, help_text='Earliest date property can be booked')
+    availability_end_date = models.DateField(blank=True, null=True, help_text='Latest date property is available (optional)')
+    min_stay_nights = models.PositiveIntegerField(default=1, help_text='Minimum number of nights per booking')
+    max_stay_nights = models.PositiveIntegerField(blank=True, null=True, help_text='Maximum number of nights per booking (optional)')
+    booking_preference = models.CharField(
+        max_length=20,
+        choices=[
+            ('instant', 'Instant Booking'),
+            ('request', 'Request to Book (Requires Approval)'),
+        ],
+        default='request',
+        help_text='Booking preference for vacation homes'
+    )
+    
     # Relationships
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_properties')
     agent = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='agent_properties')
@@ -290,3 +305,160 @@ class PropertyReview(models.Model):
 
     def __str__(self):
         return f"Review by {self.user.username} for {self.property.title}"
+
+class Availability(models.Model):
+    """
+    Daily availability status for vacation homes
+    """
+    STATUS_CHOICES = [
+        ('available', 'Available'),
+        ('booked', 'Booked / Reserved'),
+        ('blocked', 'Blocked / Unavailable'),
+    ]
+    
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='availability_dates')
+    date = models.DateField(help_text='Specific date for availability status')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
+    notes = models.TextField(blank=True, null=True, help_text='Optional notes (e.g., maintenance, personal use)')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['property', 'date']
+        ordering = ['date']
+        indexes = [
+            models.Index(fields=['property', 'date']),
+            models.Index(fields=['date', 'status']),
+        ]
+        verbose_name_plural = "Availabilities"
+    
+    def __str__(self):
+        return f"{self.property.title} - {self.date} ({self.status})"
+
+class Booking(models.Model):
+    """
+    Booking requests and confirmed bookings for vacation homes
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Approval'),
+        ('confirmed', 'Confirmed'),
+        ('cancelled', 'Cancelled'),
+        ('completed', 'Completed'),
+    ]
+    
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='bookings')
+    guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookings', null=True, blank=True)
+    guest_name = models.CharField(max_length=255, help_text='Guest name (if not logged in)')
+    guest_email = models.EmailField()
+    guest_phone = models.CharField(max_length=50)
+    check_in_date = models.DateField()
+    check_out_date = models.DateField()
+    nights = models.PositiveIntegerField(help_text='Number of nights')
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, help_text='Total booking price')
+    message = models.TextField(blank=True, null=True, help_text='Guest inquiry message')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    is_instant_booking = models.BooleanField(default=False, help_text='Whether this was an instant booking')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    confirmed_at = models.DateTimeField(blank=True, null=True)
+    cancelled_at = models.DateTimeField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['property', 'check_in_date', 'check_out_date']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"Booking for {self.property.title} - {self.check_in_date} to {self.check_out_date} ({self.status})"
+    
+    def save(self, *args, **kwargs):
+        """Override save to automatically create availability entries for booked dates"""
+        is_new = self.pk is None
+        old_status = None
+        if not is_new:
+            try:
+                old_instance = Booking.objects.get(pk=self.pk)
+                old_status = old_instance.status
+            except Booking.DoesNotExist:
+                pass
+        
+        super().save(*args, **kwargs)
+        
+        # If booking is confirmed (newly created or status changed to confirmed), mark dates as booked
+        if self.status == 'confirmed' and (is_new or old_status != 'confirmed'):
+            from datetime import timedelta
+            current_date = self.check_in_date
+            while current_date < self.check_out_date:
+                Availability.objects.update_or_create(
+                    property=self.property,
+                    date=current_date,
+                    defaults={
+                        'status': 'booked',
+                        'notes': f'Booked by {self.guest_name}'
+                    }
+                )
+                current_date += timedelta(days=1)
+        
+        # If booking is cancelled or status changed from confirmed, mark dates as available
+        if self.status == 'cancelled' and old_status == 'confirmed':
+            from datetime import timedelta
+            current_date = self.check_in_date
+            while current_date < self.check_out_date:
+                # Remove booked status (set to available or delete if no longer needed)
+                Availability.objects.filter(
+                    property=self.property,
+                    date=current_date,
+                    status='booked'
+                ).delete()
+                current_date += timedelta(days=1)
+
+class RecurringAvailabilityRule(models.Model):
+    """
+    Recurring availability rules for vacation homes (e.g., "Available every weekend")
+    """
+    RULE_TYPES = [
+        ('weekly', 'Weekly Pattern'),
+        ('monthly', 'Monthly Pattern'),
+        ('yearly', 'Yearly Pattern (Holidays)'),
+    ]
+    
+    DAYS_OF_WEEK = [
+        (0, 'Monday'),
+        (1, 'Tuesday'),
+        (2, 'Wednesday'),
+        (3, 'Thursday'),
+        (4, 'Friday'),
+        (5, 'Saturday'),
+        (6, 'Sunday'),
+    ]
+    
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='recurring_rules')
+    rule_type = models.CharField(max_length=20, choices=RULE_TYPES)
+    status = models.CharField(max_length=20, choices=Availability.STATUS_CHOICES, default='available')
+    
+    # Weekly pattern fields
+    days_of_week = models.JSONField(default=list, blank=True, help_text='List of day numbers (0=Monday, 6=Sunday) for weekly patterns')
+    
+    # Monthly pattern fields
+    day_of_month = models.PositiveIntegerField(blank=True, null=True, help_text='Day of month (1-31) for monthly patterns')
+    
+    # Yearly pattern fields (holidays)
+    month = models.PositiveIntegerField(blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(12)], help_text='Month (1-12) for yearly patterns')
+    day = models.PositiveIntegerField(blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(31)], help_text='Day of month for yearly patterns')
+    
+    # Date range for rule application
+    start_date = models.DateField(help_text='Rule applies from this date')
+    end_date = models.DateField(blank=True, null=True, help_text='Rule applies until this date (optional)')
+    
+    notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Recurring rule for {self.property.title} - {self.rule_type} ({self.status})"

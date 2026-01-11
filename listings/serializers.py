@@ -4,7 +4,8 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     UserProfile, Property, PropertyImage, Favorite, PropertyView,
-    SearchHistory, Contact, Neighborhood, PropertyReview
+    SearchHistory, Contact, Neighborhood, PropertyReview,
+    Availability, Booking, RecurringAvailabilityRule
 )
 
 class UserSerializer(serializers.ModelSerializer):
@@ -438,7 +439,10 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
             'country', 'latitude', 'longitude',
             'bedrooms', 'bathrooms', 'area_sqm', 'lot_size_sqm', 'year_built',
             'has_garage', 'has_pool', 'has_garden', 'has_balcony', 'is_furnished',
-            'has_air_conditioning', 'has_heating', 'contact_name', 'contact_phone', 'images'
+            'has_air_conditioning', 'has_heating', 'contact_name', 'contact_phone', 'images',
+            # Vacation home specific fields
+            'availability_start_date', 'availability_end_date', 'min_stay_nights', 
+            'max_stay_nights', 'booking_preference'
         ]
     
     def validate(self, data):
@@ -456,10 +460,67 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
                 'contact_phone': 'Contact Phone is required.'
             })
         
+        # Validate vacation home specific fields if property_type is vacation_home
+        if data.get('property_type') == 'vacation_home':
+            if not data.get('availability_start_date'):
+                raise serializers.ValidationError({
+                    'availability_start_date': 'Start date is required for vacation homes.'
+                })
+            min_stay = data.get('min_stay_nights', 1)
+            if min_stay < 1:
+                raise serializers.ValidationError({
+                    'min_stay_nights': 'Minimum stay must be at least 1 night.'
+                })
+            max_stay = data.get('max_stay_nights')
+            if max_stay and max_stay < min_stay:
+                raise serializers.ValidationError({
+                    'max_stay_nights': 'Maximum stay cannot be less than minimum stay.'
+                })
+            # Force listing_type to 'rent' for vacation homes
+            data['listing_type'] = 'rent'
+        
         return data
     
     # Note: Property creation is handled by perform_create in views.py
     # to properly handle file uploads and image processing
+
+class AvailabilitySerializer(serializers.ModelSerializer):
+    """Serializer for Availability model"""
+    property = serializers.PrimaryKeyRelatedField(read_only=True)
+    
+    class Meta:
+        model = Availability
+        fields = ['id', 'property', 'date', 'status', 'notes', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+class BookingSerializer(serializers.ModelSerializer):
+    """Serializer for Booking model"""
+    property = serializers.PrimaryKeyRelatedField(read_only=True)
+    guest = UserSerializer(read_only=True)
+    property_title = serializers.CharField(source='property.title', read_only=True)
+    
+    class Meta:
+        model = Booking
+        fields = [
+            'id', 'property', 'property_title', 'guest', 'guest_name', 'guest_email', 
+            'guest_phone', 'check_in_date', 'check_out_date', 'nights', 'total_price',
+            'message', 'status', 'is_instant_booking', 'created_at', 'updated_at',
+            'confirmed_at', 'cancelled_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'confirmed_at', 'cancelled_at']
+
+class RecurringAvailabilityRuleSerializer(serializers.ModelSerializer):
+    """Serializer for RecurringAvailabilityRule model"""
+    property = serializers.PrimaryKeyRelatedField(read_only=True)
+    
+    class Meta:
+        model = RecurringAvailabilityRule
+        fields = [
+            'id', 'property', 'rule_type', 'status', 'days_of_week', 'day_of_month',
+            'month', 'day', 'start_date', 'end_date', 'notes', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 class FavoriteSerializer(serializers.ModelSerializer):
     """Favorite serializer"""

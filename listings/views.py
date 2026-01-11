@@ -33,14 +33,16 @@ import requests
 import os
 from .models import (
     Property, PropertyImage, Favorite, PropertyView, SearchHistory,
-    Contact, Neighborhood, PropertyReview, UserProfile
+    Contact, Neighborhood, PropertyReview, UserProfile,
+    Availability, Booking, RecurringAvailabilityRule
 )
 # Admin views are imported in urls.py
 from .serializers import (
     PropertySerializer, PropertyListSerializer, PropertyDetailSerializer,
     PropertyCreateSerializer, PropertySearchSerializer, FavoriteSerializer,
     SearchHistorySerializer, ContactSerializer, NeighborhoodSerializer,
-    PropertyReviewSerializer, UserProfileSerializer, UserSerializer
+    PropertyReviewSerializer, UserProfileSerializer, UserSerializer,
+    AvailabilitySerializer, BookingSerializer, RecurringAvailabilityRuleSerializer
 )
 
 class StandardResultsSetPagination(PageNumberPagination):
