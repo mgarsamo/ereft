@@ -4,6 +4,8 @@ Availability and Booking Management API Views for Vacation Homes
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django.utils import timezone
+from django.core.mail import EmailMessage
+from django.conf import settings
 from datetime import timedelta, date, datetime
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated
@@ -248,6 +250,63 @@ def property_bookings(request, property_id):
         if booking_status == 'confirmed':
             booking.confirmed_at = timezone.now()
             booking.save()  # This will trigger the save() method which creates availability entries
+        
+        # Send email notification for vacation home booking requests
+        if property_obj.property_type == 'vacation_home':
+            try:
+                # Format dates for email
+                check_in_formatted = check_in.strftime('%B %d, %Y')
+                check_out_formatted = check_out.strftime('%B %d, %Y')
+                
+                # Email subject
+                subject = f'New Vacation Home Booking Request: {property_obj.title}'
+                
+                # Email body
+                booking_type = 'Instant Booking' if is_instant else 'Request to Book'
+                message = f"""
+New {booking_type} for Vacation Home
+
+Property: {property_obj.title}
+Address: {property_obj.address}, {property_obj.city}, {property_obj.sub_city or ''}
+
+Booking Details:
+- Check-in: {check_in_formatted}
+- Check-out: {check_out_formatted}
+- Nights: {nights}
+- Price per night: ETB {price_per_night:,.0f}
+- Total price: ETB {total_price:,.0f}
+- Status: {booking_status.title()}
+
+Guest Information:
+- Name: {guest_name}
+- Email: {guest_email}
+- Phone: {guest_phone}
+
+{f'Message from guest:\n{message}' if message else ''}
+
+---
+This is an automated notification from Ereft Platform.
+Booking ID: {booking.id}
+"""
+                
+                # Recipients: admin@ereft.com as primary, with CCs
+                from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@ereft.com')
+                to_recipients = ['admin@ereft.com']
+                cc_recipients = ['lydiageleta45@gmail.com', 'melaku.garsamo@gmail.com']
+                
+                # Send email with CC recipients using EmailMessage
+                email = EmailMessage(
+                    subject=subject,
+                    body=message,
+                    from_email=from_email,
+                    to=to_recipients,
+                    cc=cc_recipients,
+                )
+                email.send(fail_silently=False)
+                    
+            except Exception as e:
+                # Log error but don't fail the booking creation
+                print(f"Error sending booking notification email: {e}")
         
         serializer = BookingSerializer(booking)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
