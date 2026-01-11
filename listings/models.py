@@ -134,6 +134,10 @@ class Property(models.Model):
         default='request',
         help_text='Booking preference for vacation homes'
     )
+    # Guest Configuration (Vacation Homes Only)
+    max_adults = models.PositiveIntegerField(default=2, help_text='Maximum number of adults allowed')
+    max_children = models.PositiveIntegerField(default=0, help_text='Maximum number of children allowed (ages 0-17)')
+    pets_allowed = models.BooleanField(default=False, help_text='Whether pets are allowed on the property')
     
     # Relationships
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_properties')
