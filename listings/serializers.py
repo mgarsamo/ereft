@@ -444,7 +444,7 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
             'has_air_conditioning', 'has_heating', 'contact_name', 'contact_phone', 'images',
             # Vacation home specific fields
             'availability_start_date', 'availability_end_date', 'min_stay_nights', 
-            'max_stay_nights', 'booking_preference'
+            'max_stay_nights', 'booking_preference', 'max_adults', 'max_children', 'pets_allowed'
         ]
     
     def validate(self, data):
