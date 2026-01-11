@@ -292,7 +292,7 @@ Booking ID: {booking.id}
                 # Recipients: admin@ereft.com as primary, with CCs
                 from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@ereft.com')
                 to_recipients = ['admin@ereft.com']
-                cc_recipients = ['lydiageleta45@gmail.com', 'melaku.garsamo@gmail.com']
+                cc_recipients = ['lydiageleta45@gmail.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com']
                 
                 # Send email with CC recipients using EmailMessage
                 email = EmailMessage(
