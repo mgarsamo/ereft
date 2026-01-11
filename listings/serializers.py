@@ -348,7 +348,9 @@ class PropertyListSerializer(serializers.ModelSerializer):
             'address', 'city', 'sub_city', 'kebele', 'bedrooms', 'bathrooms',
             'area_sqm', 'images', 'primary_image', 'is_favorited', 'created_at', 'status', 'owner', 'views_count',
             # Vacation home availability fields
-            'availability_start_date', 'availability_end_date', 'min_stay_nights', 'max_stay_nights', 'booking_preference'
+            'availability_start_date', 'availability_end_date', 'min_stay_nights', 'max_stay_nights', 'booking_preference',
+            # Vacation home guest configuration fields
+            'max_adults', 'max_children', 'pets_allowed'
         ]
         # Note: contact_name and contact_phone are NOT in fields list, so they won't be included
     
