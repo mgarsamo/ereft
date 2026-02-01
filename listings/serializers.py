@@ -350,7 +350,9 @@ class PropertyListSerializer(serializers.ModelSerializer):
             # Vacation home availability fields
             'availability_start_date', 'availability_end_date', 'min_stay_nights', 'max_stay_nights', 'booking_preference',
             # Vacation home guest configuration fields
-            'max_adults', 'max_children', 'pets_allowed'
+            'max_adults', 'max_children', 'pets_allowed',
+            # Guest house/Hotel name (vacation homes only)
+            'guest_house_name'
         ]
         # Note: contact_name and contact_phone are NOT in fields list, so they won't be included
     
@@ -446,7 +448,9 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
             'has_air_conditioning', 'has_heating', 'contact_name', 'contact_phone', 'images',
             # Vacation home specific fields
             'availability_start_date', 'availability_end_date', 'min_stay_nights', 
-            'max_stay_nights', 'booking_preference', 'max_adults', 'max_children', 'pets_allowed'
+            'max_stay_nights', 'booking_preference', 'max_adults', 'max_children', 'pets_allowed',
+            # Guest house/Hotel name (vacation homes only)
+            'guest_house_name'
         ]
     
     def validate(self, data):

@@ -138,6 +138,13 @@ class Property(models.Model):
     max_adults = models.PositiveIntegerField(default=2, help_text='Maximum number of adults allowed')
     max_children = models.PositiveIntegerField(default=0, help_text='Maximum number of children allowed (ages 0-17)')
     pets_allowed = models.BooleanField(default=False, help_text='Whether pets are allowed on the property')
+    # Guest House/Hotel Name (Vacation Homes Only - Optional)
+    guest_house_name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text='Name of the guest house or hotel if this vacation home is part of a larger establishment'
+    )
     
     # Relationships
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_properties')
