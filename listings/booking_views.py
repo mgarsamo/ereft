@@ -113,16 +113,27 @@ def bookings_list_create(request):
                     except (ValueError, TypeError):
                         print(f"Warning: Could not parse check_out_date: {check_out}")
         
+        # Validate that dates were successfully parsed
+        if not check_in_date_obj or not check_out_date_obj:
+            return Response({'detail': 'Invalid date format. Please use YYYY-MM-DD format for dates.'}, status=status.HTTP_400_BAD_REQUEST)
+        
         # Use parsed dates for calculations
-        if check_in_date_obj and check_out_date_obj:
-            calculated_nights = (check_out_date_obj - check_in_date_obj).days
-            if calculated_nights > 0:
-                nights = calculated_nights
-                if not total_price and property_obj.price:
-                    total_price = calculated_nights * float(property_obj.price)
-            # Use parsed dates for booking creation (convert back to YYYY-MM-DD string)
-            check_in = check_in_date_obj.isoformat()
-            check_out = check_out_date_obj.isoformat()
+        calculated_nights = (check_out_date_obj - check_in_date_obj).days
+        if calculated_nights <= 0:
+            return Response({'detail': 'Check-out date must be after check-in date'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if calculated_nights > 0:
+            nights = calculated_nights
+            if not total_price and property_obj.price:
+                total_price = calculated_nights * float(property_obj.price)
+        
+        # Validate dates are in the future and check-out is after check-in
+        # CRITICAL: Use date objects for validation, not strings
+        today = date.today()
+        if check_in_date_obj < today:
+            return Response({'detail': 'Check-in date cannot be in the past'}, status=status.HTTP_400_BAD_REQUEST)
+        if check_out_date_obj <= check_in_date_obj:
+            return Response({'detail': 'Check-out date must be after check-in date'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Auto-populate user info if missing
         guest_name = request.data.get('guest_name')
@@ -139,9 +150,6 @@ def bookings_list_create(request):
             guest_email = request.data.get('email', '')
         
         # Validate all required fields before creating booking
-        if not check_in or not check_out:
-            return Response({'detail': 'Check-in and check-out dates are required'}, status=status.HTTP_400_BAD_REQUEST)
-        
         if not guest_email:
             return Response({'detail': 'Guest email is required'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -161,27 +169,20 @@ def bookings_list_create(request):
             # Ensure nights is a positive integer
             nights_int = max(1, int(nights or 1))
             
+            # CRITICAL: Use date objects directly - Django ORM will handle conversion
             booking_data = {
                 'property': property_obj,
                 'guest': request.user if request.user.is_authenticated else None,
                 'guest_name': guest_name_clean,
                 'guest_email': guest_email,
                 'guest_phone': guest_phone_clean,
-                'check_in_date': check_in,
-                'check_out_date': check_out,
+                'check_in_date': check_in_date_obj,  # Use date object, not string
+                'check_out_date': check_out_date_obj,  # Use date object, not string
                 'nights': nights_int,
                 'total_price': total_price_decimal,
                 'message': (request.data.get('message', '') or '')[:5000],  # Limit message length
                 'status': request.data.get('status', 'requested'),
             }
-            
-            # Validate dates are in the future and check-out is after check-in
-            from datetime import date
-            today = date.today()
-            if booking_data['check_in_date'] < today:
-                return Response({'detail': 'Check-in date cannot be in the past'}, status=status.HTTP_400_BAD_REQUEST)
-            if booking_data['check_out_date'] <= booking_data['check_in_date']:
-                return Response({'detail': 'Check-out date must be after check-in date'}, status=status.HTTP_400_BAD_REQUEST)
             
             booking = Booking.objects.create(**booking_data)
             print(f"✅ Booking created successfully: {booking.id}")
