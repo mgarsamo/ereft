@@ -50,27 +50,76 @@ def bookings_list_create(request):
         })
     
     elif request.method == 'POST':
-        # Create new booking request
+        # Create new booking request with automatic data population
         property_id = request.data.get('property')
+        
+        # Auto-populate property ID if missing (try to get from URL or use fallback)
         if not property_id:
-            return Response({'detail': 'Property ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            # Try to extract from referer URL or use a default
+            referer = request.META.get('HTTP_REFERER', '')
+            import re
+            property_match = re.search(r'/properties/([a-f0-9-]+)', referer)
+            if property_match:
+                property_id = property_match.group(1)
+            else:
+                # Last resort: try to get from message if it contains property link
+                message = request.data.get('message', '')
+                property_match = re.search(r'/properties/([a-f0-9-]+)', message)
+                if property_match:
+                    property_id = property_match.group(1)
+        
+        if not property_id:
+            return Response({'detail': 'Property ID is required. Please ensure you are booking from a property page.'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             property_obj = Property.objects.get(id=property_id)
         except Property.DoesNotExist:
-            return Response({'detail': 'Property not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': 'Property not found. The property may have been removed.'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Create booking
+        # Auto-calculate nights and total price if missing
+        check_in = request.data.get('check_in_date')
+        check_out = request.data.get('check_out_date')
+        nights = request.data.get('nights')
+        total_price = request.data.get('total_price')
+        
+        if check_in and check_out and (not nights or not total_price):
+            from datetime import datetime
+            try:
+                check_in_date = datetime.strptime(check_in, '%Y-%m-%d').date()
+                check_out_date = datetime.strptime(check_out, '%Y-%m-%d').date()
+                calculated_nights = (check_out_date - check_in_date).days
+                if calculated_nights > 0:
+                    nights = calculated_nights
+                    if not total_price and property_obj.price:
+                        total_price = calculated_nights * float(property_obj.price)
+            except (ValueError, TypeError):
+                pass
+        
+        # Auto-populate user info if missing
+        guest_name = request.data.get('guest_name')
+        guest_email = request.data.get('guest_email')
+        guest_phone = request.data.get('guest_phone', '')
+        
+        if not guest_name and request.user.is_authenticated:
+            guest_name = request.user.get_full_name() or request.user.username or 'Guest'
+        if not guest_email and request.user.is_authenticated:
+            guest_email = request.user.email or ''
+        if not guest_name:
+            guest_name = 'Guest'
+        if not guest_email:
+            guest_email = request.data.get('email', '')
+        
+        # Create booking with all auto-populated data
         booking_data = {
             'property': property_obj,
             'guest': request.user if request.user.is_authenticated else None,
-            'guest_name': request.data.get('guest_name', request.user.get_full_name() if request.user.is_authenticated else ''),
-            'guest_email': request.data.get('guest_email', request.user.email if request.user.is_authenticated else ''),
-            'guest_phone': request.data.get('guest_phone', ''),
-            'check_in_date': request.data.get('check_in_date'),
-            'check_out_date': request.data.get('check_out_date'),
-            'nights': request.data.get('nights', 1),
-            'total_price': request.data.get('total_price', 0),
+            'guest_name': guest_name,
+            'guest_email': guest_email,
+            'guest_phone': guest_phone,
+            'check_in_date': check_in,
+            'check_out_date': check_out,
+            'nights': nights or 1,
+            'total_price': total_price or 0,
             'message': request.data.get('message', ''),
             'status': request.data.get('status', 'requested'),
         }
