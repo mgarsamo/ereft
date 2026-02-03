@@ -105,8 +105,10 @@ urlpatterns = [
     path('messages/conversations/', message_views.conversations_list_create, name='conversations-list-create'),
     path('messages/conversations/<uuid:conversation_id>/messages/', message_views.conversation_messages, name='conversation-messages'),
     path('messages/conversations/<uuid:conversation_id>/mark-read/', message_views.mark_conversation_read, name='mark-conversation-read'),
+    path('messages/conversations/<uuid:conversation_id>/', message_views.delete_conversation, name='delete-conversation'),
+    path('messages/<uuid:message_id>/', message_views.delete_message, name='delete-message'),
     path('messages/', message_views.send_message, name='send-message'),
     
-    # User Search
+    # User Search (Admin Only)
     path('users/search/', message_views.search_users, name='search-users'),
 ]

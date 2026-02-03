@@ -13,6 +13,22 @@ from .models import Conversation, Message, Booking
 from .serializers import ConversationSerializer, MessageSerializer
 
 
+def is_admin(user):
+    """Check if user is admin"""
+    if not user.is_authenticated:
+        return False
+    admin_emails = ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
+    return user.is_superuser or user.is_staff or (user.email and user.email.lower() in [e.lower() for e in admin_emails])
+
+
+def get_admin_users():
+    """Get all admin users"""
+    admin_emails = ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
+    return User.objects.filter(
+        Q(is_superuser=True) | Q(is_staff=True) | Q(email__in=admin_emails)
+    )
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def conversations_list_create(request):
@@ -39,6 +55,17 @@ def conversations_list_create(request):
             participant = User.objects.get(id=participant_id)
         except User.DoesNotExist:
             return Response({'detail': 'Participant not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Enforce admin-user messaging only
+        user_is_admin = is_admin(request.user)
+        participant_is_admin = is_admin(participant)
+        
+        # Users can only message admins, admins can message users
+        if not user_is_admin and not participant_is_admin:
+            return Response({'detail': 'Users can only message admins'}, status=status.HTTP_403_FORBIDDEN)
+        
+        if user_is_admin and participant_is_admin:
+            return Response({'detail': 'Admins cannot message other admins'}, status=status.HTTP_403_FORBIDDEN)
         
         # Check if conversation already exists
         existing_conv = Conversation.objects.filter(
@@ -108,6 +135,17 @@ def send_message(request):
         except User.DoesNotExist:
             return Response({'detail': 'Recipient not found'}, status=status.HTTP_404_NOT_FOUND)
         
+        # Enforce admin-user messaging only
+        user_is_admin = is_admin(request.user)
+        recipient_is_admin = is_admin(recipient)
+        
+        # Users can only message admins, admins can message users
+        if not user_is_admin and not recipient_is_admin:
+            return Response({'detail': 'Users can only message admins'}, status=status.HTTP_403_FORBIDDEN)
+        
+        if user_is_admin and recipient_is_admin:
+            return Response({'detail': 'Admins cannot message other admins'}, status=status.HTTP_403_FORBIDDEN)
+        
         # Find or create conversation
         conversation = Conversation.objects.filter(
             participants=request.user
@@ -153,10 +191,22 @@ def mark_conversation_read(request, conversation_id):
     return Response({'detail': 'Messages marked as read'})
 
 
+def is_admin(user):
+    """Check if user is admin"""
+    if not user.is_authenticated:
+        return False
+    admin_emails = ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
+    return user.is_superuser or user.is_staff or (user.email and user.email.lower() in [e.lower() for e in admin_emails])
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def search_users(request):
-    """Search users by username or email"""
+    """Search users by username or email (admin only)"""
+    # Only admins can search for users
+    if not is_admin(request.user):
+        return Response({'detail': 'Only admins can search for users'}, status=status.HTTP_403_FORBIDDEN)
+    
     query = request.query_params.get('q', '').strip()
     
     if len(query) < 2:
