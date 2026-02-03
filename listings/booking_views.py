@@ -117,24 +117,47 @@ def bookings_list_create(request):
             return Response({'detail': 'Guest email is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Create booking with all auto-populated data
+        # Ensure all fields meet database constraints
         try:
+            # Ensure guest_phone doesn't exceed max_length (50)
+            guest_phone_clean = (guest_phone or '')[:50]
+            
+            # Ensure guest_name doesn't exceed max_length (255)
+            guest_name_clean = (guest_name or 'Guest')[:255]
+            
+            # Ensure total_price is a Decimal
+            from decimal import Decimal
+            total_price_decimal = Decimal(str(total_price or 0))
+            
+            # Ensure nights is a positive integer
+            nights_int = max(1, int(nights or 1))
+            
             booking_data = {
                 'property': property_obj,
                 'guest': request.user if request.user.is_authenticated else None,
-                'guest_name': guest_name,
+                'guest_name': guest_name_clean,
                 'guest_email': guest_email,
-                'guest_phone': guest_phone or '',
+                'guest_phone': guest_phone_clean,
                 'check_in_date': check_in,
                 'check_out_date': check_out,
-                'nights': nights or 1,
-                'total_price': total_price or 0,
-                'message': request.data.get('message', '') or '',
+                'nights': nights_int,
+                'total_price': total_price_decimal,
+                'message': (request.data.get('message', '') or '')[:5000],  # Limit message length
                 'status': request.data.get('status', 'requested'),
             }
             
+            # Validate dates are in the future and check-out is after check-in
+            from datetime import date
+            today = date.today()
+            if booking_data['check_in_date'] < today:
+                return Response({'detail': 'Check-in date cannot be in the past'}, status=status.HTTP_400_BAD_REQUEST)
+            if booking_data['check_out_date'] <= booking_data['check_in_date']:
+                return Response({'detail': 'Check-out date must be after check-in date'}, status=status.HTTP_400_BAD_REQUEST)
+            
             booking = Booking.objects.create(**booking_data)
+            print(f"✅ Booking created successfully: {booking.id}")
         except Exception as e:
-            print(f"Error creating booking: {e}")
+            print(f"❌ Error creating booking: {e}")
             import traceback
             traceback.print_exc()
             return Response({'detail': f'Failed to create booking: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -164,9 +187,16 @@ def bookings_list_create(request):
                 ).first()
             
             if admin_users and request.user.is_authenticated:
-                # Create the booking thread conversation
-                conversation = Conversation.objects.create(booking=booking)
-                conversation.participants.add(request.user, admin_users)
+                # Check if conversation already exists for this booking
+                existing_conversation = Conversation.objects.filter(booking=booking).first()
+                if existing_conversation:
+                    conversation = existing_conversation
+                    print(f"✅ Using existing conversation: {conversation.id}")
+                else:
+                    # Create the booking thread conversation
+                    conversation = Conversation.objects.create(booking=booking)
+                    conversation.participants.add(request.user, admin_users)
+                    print(f"✅ Created new conversation: {conversation.id}")
                 conversation_created = True
                 
                 # Create initial system message with property details
