@@ -191,12 +191,32 @@ def mark_conversation_read(request, conversation_id):
     return Response({'detail': 'Messages marked as read'})
 
 
-def is_admin(user):
-    """Check if user is admin"""
-    if not user.is_authenticated:
-        return False
-    admin_emails = ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
-    return user.is_superuser or user.is_staff or (user.email and user.email.lower() in [e.lower() for e in admin_emails])
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_message(request, message_id):
+    """Delete a message (only sender can delete)"""
+    message = get_object_or_404(Message, id=message_id)
+    
+    # Only sender can delete their own message
+    if message.sender != request.user:
+        return Response({'detail': 'You can only delete your own messages'}, status=status.HTTP_403_FORBIDDEN)
+    
+    message.delete()
+    return Response({'detail': 'Message deleted'}, status=status.HTTP_200_OK)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_conversation(request, conversation_id):
+    """Delete a conversation (both participants can delete)"""
+    conversation = get_object_or_404(Conversation, id=conversation_id)
+    
+    # Check if user is a participant
+    if request.user not in conversation.participants.all():
+        return Response({'detail': 'You are not a participant in this conversation'}, status=status.HTTP_403_FORBIDDEN)
+    
+    conversation.delete()
+    return Response({'detail': 'Conversation deleted'}, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
