@@ -109,67 +109,124 @@ def bookings_list_create(request):
         if not guest_email:
             guest_email = request.data.get('email', '')
         
-        # Create booking with all auto-populated data
-        booking_data = {
-            'property': property_obj,
-            'guest': request.user if request.user.is_authenticated else None,
-            'guest_name': guest_name,
-            'guest_email': guest_email,
-            'guest_phone': guest_phone,
-            'check_in_date': check_in,
-            'check_out_date': check_out,
-            'nights': nights or 1,
-            'total_price': total_price or 0,
-            'message': request.data.get('message', ''),
-            'status': request.data.get('status', 'requested'),
-        }
+        # Validate all required fields before creating booking
+        if not check_in or not check_out:
+            return Response({'detail': 'Check-in and check-out dates are required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        booking = Booking.objects.create(**booking_data)
+        if not guest_email:
+            return Response({'detail': 'Guest email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create booking with all auto-populated data
+        try:
+            booking_data = {
+                'property': property_obj,
+                'guest': request.user if request.user.is_authenticated else None,
+                'guest_name': guest_name,
+                'guest_email': guest_email,
+                'guest_phone': guest_phone or '',
+                'check_in_date': check_in,
+                'check_out_date': check_out,
+                'nights': nights or 1,
+                'total_price': total_price or 0,
+                'message': request.data.get('message', '') or '',
+                'status': request.data.get('status', 'requested'),
+            }
+            
+            booking = Booking.objects.create(**booking_data)
+        except Exception as e:
+            print(f"Error creating booking: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({'detail': f'Failed to create booking: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Create booking thread conversation (CRITICAL: This is the unified booking thread)
+        # This MUST succeed for the booking system to work properly
+        conversation_created = False
         try:
-            # Get admin users
-            admin_users = User.objects.filter(
-                Q(is_superuser=True) | Q(is_staff=True) | 
-                Q(email__in=['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com'])
-            ).first()
+            # Get admin users - try multiple methods to ensure we find one
+            admin_users = None
+            admin_emails = ['admin@ereft.com', 'melaku.garsamo@gmail.com', 'cb.garsamo@gmail.com', 'lydiageleta45@gmail.com']
+            
+            # Try to find admin by email first
+            for email in admin_emails:
+                try:
+                    admin_user = User.objects.filter(email__iexact=email).first()
+                    if admin_user:
+                        admin_users = admin_user
+                        break
+                except Exception:
+                    continue
+            
+            # Fallback to superuser or staff
+            if not admin_users:
+                admin_users = User.objects.filter(
+                    Q(is_superuser=True) | Q(is_staff=True)
+                ).first()
             
             if admin_users and request.user.is_authenticated:
                 # Create the booking thread conversation
                 conversation = Conversation.objects.create(booking=booking)
                 conversation.participants.add(request.user, admin_users)
+                conversation_created = True
                 
                 # Create initial system message with property details
-                property_url = f"{request.scheme}://{request.get_host()}/properties/{property_obj.id}"
-                property_image = ""
-                if property_obj.images.exists():
-                    primary_img = property_obj.images.filter(is_primary=True).first()
-                    if primary_img:
-                        property_image = primary_img.image_url or ""
-                    else:
-                        property_image = property_obj.images.first().image_url or ""
+                try:
+                    # Get property URL - handle both http and https
+                    scheme = request.scheme if hasattr(request, 'scheme') else 'https'
+                    host = request.get_host() if hasattr(request, 'get_host') else 'www.ereft.com'
+                    property_url = f"{scheme}://{host}/properties/{property_obj.id}"
+                except Exception:
+                    property_url = f"https://www.ereft.com/properties/{property_obj.id}"
                 
-                initial_message = f"New booking request submitted for {property_obj.title}.\n\n"
-                initial_message += f"Property: {property_obj.title}\n"
-                initial_message += f"Location: {property_obj.city}" + (f", {property_obj.sub_city}" if property_obj.sub_city else "") + "\n"
+                # Get property image with fallbacks
+                property_image = ""
+                try:
+                    if hasattr(property_obj, 'images') and property_obj.images.exists():
+                        primary_img = property_obj.images.filter(is_primary=True).first()
+                        if primary_img:
+                            property_image = primary_img.image_url or ""
+                        else:
+                            first_img = property_obj.images.first()
+                            if first_img:
+                                property_image = first_img.image_url or ""
+                except Exception:
+                    pass
+                
+                # Build comprehensive initial message
+                initial_message = f"New booking request submitted for {property_obj.title or 'Property'}.\n\n"
+                initial_message += f"Property: {property_obj.title or 'Property'}\n"
+                initial_message += f"Property ID: {property_obj.id}\n"
+                initial_message += f"Location: {property_obj.city or 'Unknown'}" + (f", {property_obj.sub_city}" if property_obj.sub_city else "") + "\n"
                 initial_message += f"Check-in: {booking.check_in_date}\n"
                 initial_message += f"Check-out: {booking.check_out_date}\n"
-                initial_message += f"Nights: {booking.nights}\n"
-                initial_message += f"Total Price: {booking.total_price} ETB\n"
-                if property_url:
-                    initial_message += f"\nProperty Link: {property_url}\n"
+                initial_message += f"Nights: {booking.nights or 1}\n"
+                initial_message += f"Total Price: {booking.total_price or 0} ETB\n"
+                initial_message += f"\nProperty Link: {property_url}\n"
+                if property_image:
+                    initial_message += f"Property Image: {property_image}\n"
+                initial_message += f"\nGuest Information:\n"
+                initial_message += f"Name: {booking.guest_name or 'Guest'}\n"
+                initial_message += f"Email: {booking.guest_email or 'Not provided'}\n"
+                if booking.guest_phone:
+                    initial_message += f"Phone: {booking.guest_phone}\n"
                 if booking.message:
                     initial_message += f"\nGuest Message: {booking.message}"
                 
+                # Create the initial message in the booking thread
                 Message.objects.create(
                     conversation=conversation,
                     sender=request.user,
                     recipient=admin_users,
                     content=initial_message
                 )
+            else:
+                print(f"Warning: Could not create booking thread - admin_users={admin_users}, user_authenticated={request.user.is_authenticated}")
         except Exception as e:
-            # If conversation creation fails, booking still succeeds
+            # Log the error but don't fail the booking
+            import traceback
             print(f"Error creating booking thread: {e}")
+            traceback.print_exc()
+            # Booking still succeeds even if thread creation fails
         
         serializer = BookingSerializer(booking, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
