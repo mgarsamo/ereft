@@ -82,18 +82,47 @@ def bookings_list_create(request):
         nights = request.data.get('nights')
         total_price = request.data.get('total_price')
         
-        if check_in and check_out and (not nights or not total_price):
-            from datetime import datetime
+        # Parse dates and calculate if needed
+        from datetime import datetime, date
+        check_in_date_obj = None
+        check_out_date_obj = None
+        
+        if check_in:
             try:
-                check_in_date = datetime.strptime(check_in, '%Y-%m-%d').date()
-                check_out_date = datetime.strptime(check_out, '%Y-%m-%d').date()
-                calculated_nights = (check_out_date - check_in_date).days
-                if calculated_nights > 0:
-                    nights = calculated_nights
-                    if not total_price and property_obj.price:
-                        total_price = calculated_nights * float(property_obj.price)
+                # Try YYYY-MM-DD format first (standard HTML date input)
+                check_in_date_obj = datetime.strptime(check_in, '%Y-%m-%d').date()
             except (ValueError, TypeError):
-                pass
+                try:
+                    # Try other common formats
+                    check_in_date_obj = datetime.strptime(check_in, '%Y/%m/%d').date()
+                except (ValueError, TypeError):
+                    try:
+                        check_in_date_obj = datetime.strptime(check_in, '%m/%d/%Y').date()
+                    except (ValueError, TypeError):
+                        print(f"Warning: Could not parse check_in_date: {check_in}")
+        
+        if check_out:
+            try:
+                check_out_date_obj = datetime.strptime(check_out, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    check_out_date_obj = datetime.strptime(check_out, '%Y/%m/%d').date()
+                except (ValueError, TypeError):
+                    try:
+                        check_out_date_obj = datetime.strptime(check_out, '%m/%d/%Y').date()
+                    except (ValueError, TypeError):
+                        print(f"Warning: Could not parse check_out_date: {check_out}")
+        
+        # Use parsed dates for calculations
+        if check_in_date_obj and check_out_date_obj:
+            calculated_nights = (check_out_date_obj - check_in_date_obj).days
+            if calculated_nights > 0:
+                nights = calculated_nights
+                if not total_price and property_obj.price:
+                    total_price = calculated_nights * float(property_obj.price)
+            # Use parsed dates for booking creation (convert back to YYYY-MM-DD string)
+            check_in = check_in_date_obj.isoformat()
+            check_out = check_out_date_obj.isoformat()
         
         # Auto-populate user info if missing
         guest_name = request.data.get('guest_name')
