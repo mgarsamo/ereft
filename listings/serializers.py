@@ -557,10 +557,10 @@ class ConversationSerializer(serializers.ModelSerializer):
         return UserSerializer(first_participant).data if first_participant else None
     
     def get_last_message(self, obj):
-        """Get the last message in the conversation"""
-        last_msg = obj.messages.last()
+        """Get the last non-deleted message in the conversation"""
+        last_msg = obj.messages.filter(deleted_at__isnull=True).order_by('-created_at').first()
         if last_msg:
-            return MessageSerializer(last_msg).data
+            return MessageSerializer(last_msg, context=self.context).data
         return None
     
     def get_unread_count(self, obj):
@@ -575,11 +575,12 @@ class MessageSerializer(serializers.ModelSerializer):
     """Serializer for Message model"""
     sender = UserSerializer(read_only=True)
     recipient = UserSerializer(read_only=True)
+    is_deleted = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = Message
-        fields = ['id', 'conversation', 'sender', 'recipient', 'content', 'read', 'read_at', 'created_at']
-        read_only_fields = ['id', 'created_at', 'read_at']
+        fields = ['id', 'conversation', 'sender', 'recipient', 'content', 'read', 'read_at', 'created_at', 'deleted_at', 'is_deleted']
+        read_only_fields = ['id', 'created_at', 'read_at', 'deleted_at', 'is_deleted']
 
 
 class RecurringAvailabilityRuleSerializer(serializers.ModelSerializer):

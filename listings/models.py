@@ -502,13 +502,15 @@ class Conversation(models.Model):
         return self.participants.exclude(id=user.id).first()
     
     def get_unread_count(self, user):
-        """Get unread message count for a user"""
-        return self.messages.filter(read=False).exclude(sender=user).count()
+        """Get unread message count for a user (excluding soft-deleted messages)"""
+        return self.messages.filter(read=False, deleted_at__isnull=True).exclude(sender=user).count()
 
 
 class Message(models.Model):
     """
     Individual message within a conversation
+    Messages are never auto-deleted and remain accessible indefinitely.
+    Deletion is handled via soft delete (deleted_at field).
     """
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
@@ -516,6 +518,8 @@ class Message(models.Model):
     content = models.TextField()
     read = models.BooleanField(default=False)
     read_at = models.DateTimeField(blank=True, null=True)
+    deleted_at = models.DateTimeField(blank=True, null=True, help_text='Soft delete timestamp - message is hidden but not removed')
+    deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='deleted_messages', help_text='User who deleted this message')
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -523,10 +527,16 @@ class Message(models.Model):
         indexes = [
             models.Index(fields=['conversation', 'created_at']),
             models.Index(fields=['recipient', 'read']),
+            models.Index(fields=['deleted_at']),
         ]
     
     def __str__(self):
         return f"Message from {self.sender.username} to {self.recipient.username}"
+    
+    @property
+    def is_deleted(self):
+        """Check if message is soft-deleted"""
+        return self.deleted_at is not None
     
     def mark_as_read(self):
         """Mark message as read"""

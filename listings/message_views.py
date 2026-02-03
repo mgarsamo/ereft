@@ -56,16 +56,17 @@ def conversations_list_create(request):
         except User.DoesNotExist:
             return Response({'detail': 'Participant not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Enforce admin-user messaging only
+        # Enforce messaging permissions:
+        # - Admins can message anyone (users and other admins)
+        # - Users can only message admins
         user_is_admin = is_admin(request.user)
         participant_is_admin = is_admin(participant)
         
-        # Users can only message admins, admins can message users
+        # Users can only message admins
         if not user_is_admin and not participant_is_admin:
             return Response({'detail': 'Users can only message admins'}, status=status.HTTP_403_FORBIDDEN)
         
-        if user_is_admin and participant_is_admin:
-            return Response({'detail': 'Admins cannot message other admins'}, status=status.HTTP_403_FORBIDDEN)
+        # Admins can message anyone (including other admins) - no restriction needed
         
         # Check if conversation already exists
         existing_conv = Conversation.objects.filter(
@@ -96,14 +97,22 @@ def conversations_list_create(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def conversation_messages(request, conversation_id):
-    """Get all messages in a conversation"""
+    """
+    Get all messages in a conversation.
+    Returns full message history in chronological order.
+    Soft-deleted messages are excluded unless user is admin viewing full history.
+    """
     conversation = get_object_or_404(Conversation, id=conversation_id)
     
     # Check if user is a participant
     if request.user not in conversation.participants.all():
         return Response({'detail': 'You do not have permission to view this conversation'}, status=status.HTTP_403_FORBIDDEN)
     
-    messages = conversation.messages.all().order_by('created_at')
+    # Get all messages, excluding soft-deleted ones (unless admin wants to see them)
+    # For now, we exclude soft-deleted messages for all users to maintain clean UI
+    # Admins can see deleted messages if needed in the future by adding a query parameter
+    messages = conversation.messages.filter(deleted_at__isnull=True).order_by('created_at')
+    
     serializer = MessageSerializer(messages, many=True, context={'request': request})
     return Response({
         'results': serializer.data,
@@ -135,16 +144,17 @@ def send_message(request):
         except User.DoesNotExist:
             return Response({'detail': 'Recipient not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Enforce admin-user messaging only
+        # Enforce messaging permissions:
+        # - Admins can message anyone (users and other admins)
+        # - Users can only message admins
         user_is_admin = is_admin(request.user)
         recipient_is_admin = is_admin(recipient)
         
-        # Users can only message admins, admins can message users
+        # Users can only message admins
         if not user_is_admin and not recipient_is_admin:
             return Response({'detail': 'Users can only message admins'}, status=status.HTTP_403_FORBIDDEN)
         
-        if user_is_admin and recipient_is_admin:
-            return Response({'detail': 'Admins cannot message other admins'}, status=status.HTTP_403_FORBIDDEN)
+        # Admins can message anyone (including other admins) - no restriction needed
         
         # Find or create conversation
         conversation = Conversation.objects.filter(
@@ -194,15 +204,24 @@ def mark_conversation_read(request, conversation_id):
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_message(request, message_id):
-    """Delete a message (only sender can delete)"""
+    """
+    Soft delete a message (only sender can delete).
+    Message is not permanently removed - it's marked as deleted to maintain thread continuity.
+    """
     message = get_object_or_404(Message, id=message_id)
     
     # Only sender can delete their own message
     if message.sender != request.user:
         return Response({'detail': 'You can only delete your own messages'}, status=status.HTTP_403_FORBIDDEN)
     
-    message.delete()
-    return Response({'detail': 'Message deleted'}, status=status.HTTP_200_OK)
+    # Soft delete: mark as deleted but don't remove from database
+    if message.deleted_at is None:
+        message.deleted_at = timezone.now()
+        message.deleted_by = request.user
+        message.save()
+        return Response({'detail': 'Message deleted'}, status=status.HTTP_200_OK)
+    else:
+        return Response({'detail': 'Message already deleted'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['DELETE'])
