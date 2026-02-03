@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from .models import (
     UserProfile, Property, PropertyImage, Favorite, PropertyView,
     SearchHistory, Contact, Neighborhood, PropertyReview,
-    Availability, Booking, RecurringAvailabilityRule
+    Availability, Booking, RecurringAvailabilityRule, Conversation, Message
 )
 
 class UserSerializer(serializers.ModelSerializer):
@@ -503,7 +503,7 @@ class AvailabilitySerializer(serializers.ModelSerializer):
 
 class BookingSerializer(serializers.ModelSerializer):
     """Serializer for Booking model"""
-    property = serializers.PrimaryKeyRelatedField(read_only=True)
+    property = serializers.SerializerMethodField()
     guest = UserSerializer(read_only=True)
     property_title = serializers.CharField(source='property.title', read_only=True)
     
@@ -516,6 +516,71 @@ class BookingSerializer(serializers.ModelSerializer):
             'confirmed_at', 'cancelled_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'confirmed_at', 'cancelled_at']
+    
+    def get_property(self, obj):
+        """Return property details needed by frontend"""
+        prop = obj.property
+        return {
+            'id': str(prop.id),
+            'title': prop.title,
+            'city': prop.city,
+            'sub_city': prop.sub_city,
+            'address': prop.address,
+            'price': float(prop.price),
+            'property_type': prop.property_type,
+            'bedrooms': prop.bedrooms,
+            'images': [{'image_url': img.image_url, 'is_primary': img.is_primary} for img in prop.images.all()[:1]] if hasattr(prop, 'images') else [],
+            'primary_image': prop.images.filter(is_primary=True).first().image_url if prop.images.filter(is_primary=True).exists() else (prop.images.first().image_url if prop.images.exists() else None),
+        }
+
+class ConversationSerializer(serializers.ModelSerializer):
+    """Serializer for Conversation model"""
+    participant = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    booking = BookingSerializer(read_only=True)
+    
+    class Meta:
+        model = Conversation
+        fields = ['id', 'participant', 'last_message', 'unread_count', 'booking', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_participant(self, obj):
+        """Get the other participant (not the current user)"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            other = obj.get_other_participant(request.user)
+            if other:
+                return UserSerializer(other).data
+        # Fallback: return first participant
+        first_participant = obj.participants.first()
+        return UserSerializer(first_participant).data if first_participant else None
+    
+    def get_last_message(self, obj):
+        """Get the last message in the conversation"""
+        last_msg = obj.messages.last()
+        if last_msg:
+            return MessageSerializer(last_msg).data
+        return None
+    
+    def get_unread_count(self, obj):
+        """Get unread message count for current user"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.get_unread_count(request.user)
+        return 0
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    """Serializer for Message model"""
+    sender = UserSerializer(read_only=True)
+    recipient = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = Message
+        fields = ['id', 'conversation', 'sender', 'recipient', 'content', 'read', 'read_at', 'created_at']
+        read_only_fields = ['id', 'created_at', 'read_at']
+
 
 class RecurringAvailabilityRuleSerializer(serializers.ModelSerializer):
     """Serializer for RecurringAvailabilityRule model"""

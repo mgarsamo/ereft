@@ -10,6 +10,8 @@ from django.contrib.auth.views import LogoutView
 from . import views
 from . import admin_views
 from . import availability_views
+from . import booking_views
+from . import message_views
 from .auth_views import (
     CustomTokenObtainPairView, 
     CustomTokenRefreshView,
@@ -93,4 +95,18 @@ urlpatterns = [
     path('properties/<uuid:property_id>/availability/<str:date_str>/', availability_views.availability_detail, name='availability-detail'),
     path('properties/<uuid:property_id>/bookings/', availability_views.property_bookings, name='property-bookings'),
     path('bookings/<uuid:booking_id>/status/', availability_views.booking_status, name='booking-status'),
+    
+    # Booking API Endpoints
+    path('bookings/', booking_views.bookings_list_create, name='bookings-list-create'),
+    path('bookings/my/', booking_views.my_bookings, name='my-bookings'),
+    path('bookings/<uuid:booking_id>/', booking_views.booking_detail, name='booking-detail'),
+    
+    # Messaging API Endpoints
+    path('messages/conversations/', message_views.conversations_list_create, name='conversations-list-create'),
+    path('messages/conversations/<uuid:conversation_id>/messages/', message_views.conversation_messages, name='conversation-messages'),
+    path('messages/conversations/<uuid:conversation_id>/mark-read/', message_views.mark_conversation_read, name='mark-conversation-read'),
+    path('messages/', message_views.send_message, name='send-message'),
+    
+    # User Search
+    path('users/search/', message_views.search_users, name='search-users'),
 ]

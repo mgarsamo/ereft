@@ -351,10 +351,12 @@ class Booking(models.Model):
     Booking requests and confirmed bookings for vacation homes
     """
     STATUS_CHOICES = [
-        ('pending', 'Pending Approval'),
-        ('confirmed', 'Confirmed'),
+        ('requested', 'Requested'),
+        ('pending_payment', 'Pending Payment'),
+        ('pending_approval', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
         ('cancelled', 'Cancelled'),
-        ('completed', 'Completed'),
     ]
     
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='bookings')
@@ -367,7 +369,7 @@ class Booking(models.Model):
     nights = models.PositiveIntegerField(help_text='Number of nights')
     total_price = models.DecimalField(max_digits=12, decimal_places=2, help_text='Total booking price')
     message = models.TextField(blank=True, null=True, help_text='Guest inquiry message')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='requested')
     is_instant_booking = models.BooleanField(default=False, help_text='Whether this was an instant booking')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -397,8 +399,8 @@ class Booking(models.Model):
         
         super().save(*args, **kwargs)
         
-        # If booking is confirmed (newly created or status changed to confirmed), mark dates as booked
-        if self.status == 'confirmed' and (is_new or old_status != 'confirmed'):
+        # If booking is approved (newly created or status changed to approved), mark dates as booked
+        if self.status == 'approved' and (is_new or old_status != 'approved'):
             from datetime import timedelta
             current_date = self.check_in_date
             while current_date < self.check_out_date:
@@ -412,8 +414,8 @@ class Booking(models.Model):
                 )
                 current_date += timedelta(days=1)
         
-        # If booking is cancelled or status changed from confirmed, mark dates as available
-        if self.status == 'cancelled' and old_status == 'confirmed':
+        # If booking is cancelled or status changed from approved, mark dates as available
+        if self.status == 'cancelled' and old_status == 'approved':
             from datetime import timedelta
             current_date = self.check_in_date
             while current_date < self.check_out_date:
@@ -473,3 +475,62 @@ class RecurringAvailabilityRule(models.Model):
     
     def __str__(self):
         return f"Recurring rule for {self.property.title} - {self.rule_type} ({self.status})"
+
+
+class Conversation(models.Model):
+    """
+    Conversation thread between users (can be linked to a booking)
+    """
+    participants = models.ManyToManyField(User, related_name='conversations')
+    booking = models.ForeignKey(Booking, on_delete=models.SET_NULL, null=True, blank=True, related_name='conversations')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['-updated_at']),
+        ]
+    
+    def __str__(self):
+        participant_names = ', '.join([p.username for p in self.participants.all()[:2]])
+        return f"Conversation: {participant_names}"
+    
+    def get_other_participant(self, user):
+        """Get the other participant in the conversation"""
+        return self.participants.exclude(id=user.id).first()
+    
+    def get_unread_count(self, user):
+        """Get unread message count for a user"""
+        return self.messages.filter(read=False).exclude(sender=user).count()
+
+
+class Message(models.Model):
+    """
+    Individual message within a conversation
+    """
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_messages')
+    content = models.TextField()
+    read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['conversation', 'created_at']),
+            models.Index(fields=['recipient', 'read']),
+        ]
+    
+    def __str__(self):
+        return f"Message from {self.sender.username} to {self.recipient.username}"
+    
+    def mark_as_read(self):
+        """Mark message as read"""
+        if not self.read:
+            self.read = True
+            from django.utils import timezone
+            self.read_at = timezone.now()
+            self.save()
