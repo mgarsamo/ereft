@@ -505,7 +505,7 @@ class BookingSerializer(serializers.ModelSerializer):
     """Serializer for Booking model"""
     property = serializers.SerializerMethodField()
     guest = UserSerializer(read_only=True)
-    property_title = serializers.CharField(source='property.title', read_only=True)
+    property_title = serializers.SerializerMethodField()
     
     class Meta:
         model = Booking
@@ -517,33 +517,84 @@ class BookingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'confirmed_at', 'cancelled_at']
     
+    def get_property_title(self, obj):
+        """Get property title safely"""
+        if obj.property:
+            return obj.property.title
+        return None
+    
     def get_property(self, obj):
         """Return property details needed by frontend"""
+        if not obj.property:
+            return None
+        
         prop = obj.property
-        return {
-            'id': str(prop.id),
-            'title': prop.title,
-            'city': prop.city,
-            'sub_city': prop.sub_city,
-            'address': prop.address,
-            'price': float(prop.price),
-            'property_type': prop.property_type,
-            'bedrooms': prop.bedrooms,
-            'images': [{'image_url': img.image_url, 'is_primary': img.is_primary} for img in prop.images.all()[:1]] if hasattr(prop, 'images') else [],
-            'primary_image': prop.images.filter(is_primary=True).first().image_url if prop.images.filter(is_primary=True).exists() else (prop.images.first().image_url if prop.images.exists() else None),
-        }
+        try:
+            # Safely get images
+            images = []
+            primary_image = None
+            if hasattr(prop, 'images'):
+                images_queryset = prop.images.all()[:1]
+                images = [{'image_url': img.image_url, 'is_primary': img.is_primary} for img in images_queryset if hasattr(img, 'image_url')]
+                
+                # Get primary image safely
+                primary_img = prop.images.filter(is_primary=True).first()
+                if primary_img and hasattr(primary_img, 'image_url'):
+                    primary_image = primary_img.image_url
+                elif prop.images.exists():
+                    first_img = prop.images.first()
+                    if first_img and hasattr(first_img, 'image_url'):
+                        primary_image = first_img.image_url
+            
+            return {
+                'id': str(prop.id),
+                'title': prop.title or 'Property',
+                'city': prop.city or 'Unknown',
+                'sub_city': prop.sub_city or None,
+                'address': prop.address or '',
+                'price': float(prop.price) if prop.price else 0.0,
+                'property_type': prop.property_type or 'apartment',
+                'bedrooms': prop.bedrooms or 0,
+                'images': images,
+                'primary_image': primary_image,
+            }
+        except Exception as e:
+            print(f"Error serializing property in booking: {e}")
+            # Return minimal safe data
+            return {
+                'id': str(prop.id),
+                'title': getattr(prop, 'title', 'Property'),
+                'city': getattr(prop, 'city', 'Unknown'),
+                'sub_city': getattr(prop, 'sub_city', None),
+                'address': getattr(prop, 'address', ''),
+                'price': float(getattr(prop, 'price', 0)) if getattr(prop, 'price', None) else 0.0,
+                'property_type': getattr(prop, 'property_type', 'apartment'),
+                'bedrooms': getattr(prop, 'bedrooms', 0),
+                'images': [],
+                'primary_image': None,
+            }
 
 class ConversationSerializer(serializers.ModelSerializer):
     """Serializer for Conversation model"""
     participant = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
-    booking = BookingSerializer(read_only=True)
+    booking = serializers.SerializerMethodField()
     
     class Meta:
         model = Conversation
         fields = ['id', 'participant', 'last_message', 'unread_count', 'booking', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_booking(self, obj):
+        """Get booking safely - return None if no booking"""
+        if obj.booking:
+            try:
+                return BookingSerializer(obj.booking, context=self.context).data
+            except Exception as e:
+                print(f"Error serializing booking in conversation: {e}")
+                return None
+        return None
     
     def get_participant(self, obj):
         """Get the other participant (not the current user)"""

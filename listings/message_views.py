@@ -37,12 +37,21 @@ def conversations_list_create(request):
     POST: Create a new conversation
     """
     if request.method == 'GET':
-        conversations = Conversation.objects.filter(participants=request.user).distinct().order_by('-updated_at')
-        serializer = ConversationSerializer(conversations, many=True, context={'request': request})
-        return Response({
-            'results': serializer.data,
-            'count': len(serializer.data)
-        })
+        try:
+            conversations = Conversation.objects.filter(participants=request.user).distinct().order_by('-updated_at')
+            serializer = ConversationSerializer(conversations, many=True, context={'request': request})
+            return Response({
+                'results': serializer.data,
+                'count': len(serializer.data)
+            })
+        except Exception as e:
+            print(f"Error fetching conversations: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'detail': 'Error loading conversations. Please try again later.',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     elif request.method == 'POST':
         participant_id = request.data.get('participant')

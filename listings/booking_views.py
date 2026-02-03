@@ -43,11 +43,20 @@ def bookings_list_create(request):
             bookings = bookings.filter(status=status_filter)
         
         bookings = bookings.order_by('-created_at')
-        serializer = BookingSerializer(bookings, many=True, context={'request': request})
-        return Response({
-            'results': serializer.data,
-            'count': len(serializer.data)
-        })
+        try:
+            serializer = BookingSerializer(bookings, many=True, context={'request': request})
+            return Response({
+                'results': serializer.data,
+                'count': len(serializer.data)
+            })
+        except Exception as e:
+            print(f"Error serializing bookings: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'detail': 'Error loading bookings. Please try again later.',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     elif request.method == 'POST':
         # Create new booking request with automatic data population
@@ -296,12 +305,21 @@ def bookings_list_create(request):
 @permission_classes([IsAuthenticated])
 def my_bookings(request):
     """Get current user's bookings"""
-    bookings = Booking.objects.filter(guest=request.user).order_by('-created_at')
-    serializer = BookingSerializer(bookings, many=True, context={'request': request})
-    return Response({
-        'results': serializer.data,
-        'count': len(serializer.data)
-    })
+    try:
+        bookings = Booking.objects.filter(guest=request.user).order_by('-created_at')
+        serializer = BookingSerializer(bookings, many=True, context={'request': request})
+        return Response({
+            'results': serializer.data,
+            'count': len(serializer.data)
+        })
+    except Exception as e:
+        print(f"Error fetching user bookings: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'detail': 'Error loading your bookings. Please try again later.',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET', 'PATCH'])
