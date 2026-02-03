@@ -355,6 +355,7 @@ class Booking(models.Model):
         ('pending_payment', 'Pending Payment'),
         ('pending_approval', 'Pending Approval'),
         ('approved', 'Approved'),
+        ('confirmed', 'Confirmed Booking'),
         ('rejected', 'Rejected'),
         ('cancelled', 'Cancelled'),
     ]
