@@ -322,16 +322,44 @@ def my_bookings(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET', 'PATCH'])
+@api_view(['GET', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def booking_detail(request, booking_id):
     """
     GET: Get booking details
     PATCH: Update booking status (admin only for status changes)
+    DELETE: Delete booking (guest can delete their own bookings, admin can delete any)
     """
     booking = get_object_or_404(Booking, id=booking_id)
     
-    # Check permissions
+    # Check permissions for GET
+    if request.method == 'GET':
+        if not is_admin(request.user) and booking.guest != request.user:
+            return Response({'detail': 'You do not have permission to view this booking'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # DELETE: Allow guest to delete their own bookings, admin can delete any
+    if request.method == 'DELETE':
+        # Check if user is the guest or an admin
+        if not is_admin(request.user) and booking.guest != request.user:
+            return Response({'detail': 'You can only delete your own bookings'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Prevent deletion of most recent booking (frontend should handle this, but backend enforces it too)
+        # Get user's most recent booking
+        if booking.guest:
+            user_bookings = Booking.objects.filter(guest=booking.guest).order_by('-created_at')
+            if user_bookings.exists():
+                most_recent = user_bookings.first()
+                if most_recent.id == booking.id:
+                    return Response({
+                        'detail': 'Cannot delete your most recent booking. This preserves your latest booking record.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Delete the booking
+        booking_id_str = str(booking.id)
+        booking.delete()
+        return Response({'detail': 'Booking deleted successfully'}, status=status.HTTP_200_OK)
+    
+    # Check permissions for PATCH
     if not is_admin(request.user) and booking.guest != request.user:
         return Response({'detail': 'You do not have permission to view this booking'}, status=status.HTTP_403_FORBIDDEN)
     
