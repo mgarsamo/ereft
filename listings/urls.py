@@ -99,7 +99,7 @@ urlpatterns = [
     # Booking API Endpoints
     path('bookings/', booking_views.bookings_list_create, name='bookings-list-create'),
     path('bookings/my/', booking_views.my_bookings, name='my-bookings'),
-    path('bookings/<uuid:booking_id>/', booking_views.booking_detail, name='booking-detail'),
+    path('bookings/<int:booking_id>/', booking_views.booking_detail, name='booking-detail'),
     
     # Messaging API Endpoints
     path('messages/conversations/', message_views.conversations_list_create, name='conversations-list-create'),
