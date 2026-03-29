@@ -2,6 +2,7 @@
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from .constants import MAX_PROPERTY_IMAGES
 from .models import (
     UserProfile, Property, PropertyImage, Favorite, PropertyView,
     SearchHistory, Contact, Neighborhood, PropertyReview,
@@ -863,7 +864,7 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         
         # CRITICAL: Query images directly from database to ensure they're included
-        db_images = list(instance.images.all().order_by('order', 'created_at')[:4])
+        db_images = list(instance.images.all().order_by('order', 'created_at')[:MAX_PROPERTY_IMAGES])
         images_data = representation.get('images', [])
         
         print(f"   DB images count: {len(db_images)}")

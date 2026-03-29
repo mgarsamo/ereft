@@ -31,6 +31,7 @@ from datetime import timedelta
 import json
 import requests
 import os
+from .constants import MAX_PROPERTY_IMAGES
 from .models import (
     Property, PropertyImage, Favorite, PropertyView, SearchHistory,
     Contact, Neighborhood, PropertyReview, UserProfile,
@@ -559,7 +560,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         if not db_images and validated_image_urls:
             print(f"⚠️ CRITICAL: No images in database but we have {len(validated_image_urls)} validated public_ids!")
             print(f"   Creating PropertyImage objects as fallback...")
-            for idx, public_id in enumerate(validated_image_urls[:4], 1):
+            for idx, public_id in enumerate(validated_image_urls[:MAX_PROPERTY_IMAGES], 1):
                 try:
                     # Store public_id directly (e.g., "ereft_properties/nggejftgnzxzwuitw3wp")
                     prop_image = PropertyImage.objects.create(
@@ -617,7 +618,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
             print(f"⚠️ CRITICAL: No images in response or database, but we have {len(validated_image_urls)} validated URLs!")
             print(f"   Creating image objects directly in response...")
             response_data['images'] = []
-            for idx, url in enumerate(validated_image_urls[:4], 1):
+            for idx, url in enumerate(validated_image_urls[:MAX_PROPERTY_IMAGES], 1):
                 img_obj = {
                     'id': None,
                     'image': url,
@@ -692,7 +693,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         print(f"   - Property ID: {property_obj.id}")
         print(f"   - Property Title: {property_obj.title}")
         
-        for idx, img in enumerate(final_images[:4], 1):
+        for idx, img in enumerate(final_images[:MAX_PROPERTY_IMAGES], 1):
             img_url = img.get('image_url', img.get('image', 'MISSING'))
             print(f"   Final Image {idx}: image_url={str(img_url)[:100] if img_url else 'MISSING'}...")
         
@@ -859,8 +860,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 # Check for 'images' key (multiple files)
                 if 'images' in self.request.FILES:
                     image_files = self.request.FILES.getlist('images')
-                    # Limit to 4 images maximum
-                    image_files = image_files[:4]
+                    # Limit to MAX_PROPERTY_IMAGES maximum
+                    image_files = image_files[:MAX_PROPERTY_IMAGES]
                     image_count = len(image_files)
                     print(f"🏠 PropertyViewSet: Processing {image_count} image files from request.FILES")
                     
@@ -957,8 +958,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 for idx, url in enumerate(unique_images, 1):
                     print(f"   {idx}. {str(url)[:100]}...")
                 
-                # Limit to 4 images maximum
-                images_to_create = unique_images[:4]
+                # Limit to MAX_PROPERTY_IMAGES maximum
+                images_to_create = unique_images[:MAX_PROPERTY_IMAGES]
                 
                 created_count = 0
                 created_image_ids = []
@@ -1393,7 +1394,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
             # Create new PropertyImage objects from the provided images
             if images_data:
                 print(f"   📸 Creating {len(images_data)} new PropertyImage objects")
-                for i, public_id in enumerate(images_data[:4], 1):  # Limit to 4 images
+                for i, public_id in enumerate(images_data[:MAX_PROPERTY_IMAGES], 1):  # Limit images per listing
                     try:
                         # Clean up public_id (remove any brackets or quotes)
                         import re
