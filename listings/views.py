@@ -121,7 +121,19 @@ class PropertyViewSet(viewsets.ModelViewSet):
         
         # Method 1: Use getlist if available (QueryDict) - this handles FormData with multiple values
         if hasattr(request.data, 'getlist'):
-            raw_images = request.data.getlist('images')
+            raw_images = list(request.data.getlist('images'))
+            # Single field with JSON array (Next.js sends this — repeated "images" keys are often collapsed to one)
+            if len(raw_images) == 1 and isinstance(raw_images[0], str):
+                s = raw_images[0].strip()
+                if s.startswith('['):
+                    try:
+                        import json
+                        parsed = json.loads(s)
+                        if isinstance(parsed, list):
+                            raw_images = parsed
+                            print(f"🏠 PropertyViewSet.create: Parsed {len(raw_images)} images from JSON array field")
+                    except (json.JSONDecodeError, TypeError) as e:
+                        print(f"🏠 PropertyViewSet.create: images JSON parse skipped: {e}")
             print(f"🏠 PropertyViewSet.create: getlist('images') returned {len(raw_images)} items")
             for idx, item in enumerate(raw_images):
                 print(f"   Raw item {idx}: type={type(item)}, value={str(item)[:100] if item else 'None'}...")
@@ -177,7 +189,26 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 elif isinstance(images_value, str):
                     print(f"🏠 PropertyViewSet.create: Found single string value: {images_value[:100]}...")
                     value_str = images_value.strip()
-                    if value_str and len(value_str) > 5:
+                    parsed_json_list = False
+                    if value_str.startswith('['):
+                        try:
+                            import json
+                            parsed = json.loads(value_str)
+                            if isinstance(parsed, list):
+                                parsed_json_list = True
+                                print(f"🏠 PropertyViewSet.create: Method 2 — parsed JSON array with {len(parsed)} items")
+                                for idx, v in enumerate(parsed):
+                                    if v:
+                                        v_str = str(v).strip()
+                                        if v_str and len(v_str) > 5:
+                                            is_public_id = '/' in v_str and ' ' not in v_str and len(v_str) > 5
+                                            is_full_url = v_str.startswith('http://') or v_str.startswith('https://')
+                                            if is_public_id or is_full_url:
+                                                image_urls.append(v_str)
+                                                print(f"   ✅ JSON item {idx}: Valid {'public_id' if is_public_id else 'URL'}: {v_str[:50]}...")
+                        except (json.JSONDecodeError, TypeError) as e:
+                            print(f"   ⚠️ Method 2 JSON parse failed: {e}")
+                    if not parsed_json_list and value_str and len(value_str) > 5:
                         # Accept public_id OR full URL
                         is_public_id = '/' in value_str and ' ' not in value_str
                         is_full_url = value_str.startswith('http://') or value_str.startswith('https://')
